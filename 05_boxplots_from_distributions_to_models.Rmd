@@ -258,8 +258,30 @@ population CDF $F$, define fixed population fences $L_F,U_F$ and
 p_F=P(Y<L_F)+P(Y>U_F)=F(L_F)+1-F(U_F).
 \]
 
-This is a **model-dependent probability**. The multiplier 1.5 does not imply a
-universal tail probability or a fixed significance level.
+This is a **model-dependent probability**. The multiplier 1.5 does not imply a universal tail probability or a fixed significance level.
+
+
+Let's compute the theoretical probability.
+
+\[
+L=Q_1-1.5\,IQR,\qquad U=Q_3+1.5\,IQR.
+\]
+
+since, \(Q_1=-0.67449\), \(Q_3=0.67449\) and
+$IQR=2\Phi^{-1}(0.75)\,\sigma\approx1.34898\,\sigma$:
+
+
+ | Inferior Fence  \(L\) | Superior Fence  \(U\) | \(P(Y<L)\) | \(P(Y>U)\) | \(P( (Y<L) or (Y>U) ) \) |
+|---|---:|---:|---:|---:|---:|
+| \(N(0,1)\) | -2,69796 | 2,69796 | 0,34883% | 0,34883% | **0,69766%** |
+
+
+\[
+P(Y<L\ \text{o}\ Y>U)
+=2\{1-\Phi(2.69796)\}\simeq0.0069766.
+\]
+
+
 
 ```{r population-benchmark}
 population_rule <- function(label, qfun, pfun) {

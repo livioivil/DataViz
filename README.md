@@ -46,7 +46,7 @@ You do not need R to read HTML or PDF files. To complete the coding activities, 
 | :-- | :-- | :-- |
 | **Reaction time** | Activity 2: participant, condition, trial, accuracy, and response time. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/RT_data.csv) |
 | **Attendance and assignments** | Additional lab: class attendance and submitted assignments. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/students.csv) |
-| **Boxplot** | Boxplot unit. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/boxplot_data.csv) |
+| **Boxplot** | Boxplot unit. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/boxplots_data.csv) |
 | **Memory, hippocampus, and continuous age** | Available for further study; not yet assigned to a course unit. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/hippocampus_memory_age_continuous.csv) |
 | **Memory, hippocampus, and age groups** | A variant with age groups; not yet assigned to a course unit. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/hippocampus_memory_age_group.csv) |
 

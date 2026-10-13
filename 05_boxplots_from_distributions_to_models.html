@@ -3211,6 +3211,46 @@ p_F=P(Y&lt;L_F)+P(Y&gt;U_F)=F(L_F)+1-F(U_F).
 <p>This is a <strong>model-dependent probability</strong>. The
 multiplier 1.5 does not imply a universal tail probability or a fixed
 significance level.</p>
+<p>Let’s compute the theoretical probability.</p>
+<p><span class="math display">\[
+L=Q_1-1.5\,IQR,\qquad U=Q_3+1.5\,IQR.
+\]</span></p>
+<p>since, <span class="math inline">\(Q_1=-0.67449\)</span>, <span class="math inline">\(Q_3=0.67449\)</span> and <span class="math inline">\(IQR=2\Phi^{-1}(0.75)\,\sigma\approx1.34898\,\sigma\)</span>:</p>
+<table>
+<colgroup>
+<col width="13%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+<col width="17%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Inferior Fence <span class="math inline">\(L\)</span></th>
+<th align="right">Superior Fence <span class="math inline">\(U\)</span></th>
+<th align="right"><span class="math inline">\(P(Y&lt;L)\)</span></th>
+<th align="right"><span class="math inline">\(P(Y&gt;U)\)</span></th>
+<th align="right"><span class="math inline">\(P( (Y&lt;L) or (Y&gt;U)
+)\)</span></th>
+<th align="right"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(N(0,1)\)</span></td>
+<td align="right">-2,69796</td>
+<td align="right">2,69796</td>
+<td align="right">0,34883%</td>
+<td align="right">0,34883%</td>
+<td align="right"><strong>0,69766%</strong></td>
+</tr>
+</tbody>
+</table>
+<p><span class="math display">\[
+P(Y&lt;L\ \text{o}\ Y&gt;U)
+=2\{1-\Phi(2.69796)\}\simeq0.0069766.
+\]</span></p>
 <pre class="r"><code>population_rule &lt;- function(label, qfun, pfun) {
   q &lt;- qfun(c(0.25, 0.75))
   spread &lt;- diff(q)
