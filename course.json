@@ -10,20 +10,12 @@
         { "id": "01", "title": "History of statistical visualization", "description": "Read and discuss foundational examples by Playfair, Nightingale, Snow, and Minard.", "source": "01_historical_statistical_plots.rmd", "html": "01_historical_statistical_plots.html", "pdf": "01_historical_statistical_plots.pdf" },
         { "id": "02", "title": "Activity 1 · Tables, counts, and proportions", "description": "Choose denominators and charts that match the analysis question.", "source": "02_student_activity_1_table_counts.rmd", "html": "02_student_activity_1_table_counts.html", "pdf": "02_student_activity_1_table_counts.pdf" },
         { "id": "03", "title": "Statistical reasoning, perception, and colour", "description": "Evaluate scales, visual encodings, and colour choices.", "source": "03_visualization_reasoning_perception_colour.Rmd", "html": "03_visualization_reasoning_perception_colour.html", "pdf": "03_visualization_reasoning_perception_colour.pdf" },
-        { "id": "04", "title": "Activity 2 · Reaction time and accuracy", "description": "Work in groups to prepare a reproducible exploratory report with repeated measurements.", "source": "04_student_activity2_reaction_time.Rmd", "html": "04_student_activity2_reaction_time.html", "pdf": "04_student_activity2_reaction_time.pdf" }
-      ]
-    },
-    {
-      "title": "Examples and further study",
-      "items": [
-        { "id": "00", "title": "R Graphics Showcase", "description": "A collection of charts and R code to consult throughout the course. A complete PDF is not yet available.", "source": "00_graphics_showcase.Rmd", "html": "00_graphics_showcase.html" }
-      ]
-    },
-    {
-      "title": "Feedback and worked examples",
-      "items": [
+        { "id": "04", "title": "Activity 2 · Reaction time and accuracy", "description": "Work in groups to prepare a reproducible exploratory report with repeated measurements.", "source": "04_student_activity2_reaction_time.Rmd", "html": "04_student_activity2_reaction_time.html", "pdf": "04_student_activity2_reaction_time.pdf" },
         { "id": "04-F", "title": "Activity 2 · Feedback and worked example", "description": "Consult after preparing your own report to compare analytical choices.", "source": "04_student_activity2_reaction_time_feedback.Rmd", "html": "04_student_activity2_reaction_time_feedback.html", "pdf": "04_student_activity2_reaction_time_feedback.pdf" },
-        { "id": "04-A", "title": "Reaction time · Further analysis", "description": "A reference report with paired participant summaries.", "source": "04_reaction_time_analysis.Rmd", "html": "04_reaction_time_analysis.html", "pdf": "04_reaction_time_analysis.pdf" }
+        { "id": "04-A", "title": "Reaction time · Further analysis", "description": "A reference report with paired participant summaries.", "source": "04_reaction_time_analysis.Rmd", "html": "04_reaction_time_analysis.html", "pdf": "04_reaction_time_analysis.pdf" },
+        { "id": "05", "title": "Boxplots: from distributions to models", "description": "Outliers.. it depends on the model.", "source": "05_boxplots_from_distributions_to_models.Rmd", "html": "05_boxplots_from_distributions_to_models.html", "pdf": "05_boxplots_from_distributions_to_models.pdf" },
+        { "id": "06", "title": "Activity 3 · unusual compared with what?", "description": "Outliers.. it depends on the context.", "source": "06_student_activity3_boxplots.Rmd", "html": "06_student_activity3_boxplots.html", "pdf": "06_student_activity3_boxplots.pdf" },
+        { "id": "07", "title": "Kernel Density Estimation: bandwidth and sample size", "description": "Explore bandwidth, sample size, kernel shapes, and boundary effects through real data and simulations.", "source": "07_kde_bandwidth_sample_size.Rmd", "html": "07_kde_bandwidth_sample_size.html" }
       ]
     },
     {
@@ -36,6 +28,7 @@
   "datasets": [
     { "path": "data/RT_data.csv", "title": "Reaction time", "description": "Activity 2: participant, condition, trial, accuracy, and response time." },
     { "path": "data/students.csv", "title": "Attendance and assignments", "description": "Additional lab: class attendance and submitted assignments." },
+    { "path": "data/boxplots_data.csv", "title": "Boxplot", "description": "Boxplot unit." },
     { "path": "data/hippocampus_memory_age_continuous.csv", "title": "Memory, hippocampus, and continuous age", "description": "Available for further study; not yet assigned to a course unit." },
     { "path": "data/hippocampus_memory_age_group.csv", "title": "Memory, hippocampus, and age groups", "description": "A variant with age groups; not yet assigned to a course unit." }
   ]

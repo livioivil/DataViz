@@ -11,7 +11,7 @@ The course is updated throughout the term: units, activities, and materials may 
 - **Entire course:** [download the repository ZIP](https://github.com/livioivil/DataViz/archive/refs/heads/main.zip) and extract it before opening the files. Keep the data/ folder and repository structure intact when working with the code.
 - **Browsable catalogue:** after downloading, open [index.html](index.html) in your browser to browse the materials and download individual files. GitHub's repository view displays HTML as source code.
 
-You do not need R to read HTML or PDF files. To complete the coding activities, you need basic knowledge of R and descriptive statistics, R, and an editor such as RStudio. Open [didactic_materials.Rproj](didactic_materials.Rproj) from the course folder and follow the package requirements listed in each unit.
+You do not need R to read HTML or PDF files. To complete the coding activities, you need basic knowledge of R and descriptive statistics, R, and an editor such as RStudio. Open [DataViz.Rproj](DataViz.Rproj) from the course folder and follow the package requirements listed in each unit.
 
 ## Learning objectives
 
@@ -32,7 +32,7 @@ You do not need R to read HTML or PDF files. To complete the coding activities, 
 | 04-A | **Reaction time · Further analysis**<br>A reference report with paired participant summaries. | [Download HTML](https://raw.githubusercontent.com/livioivil/DataViz/main/04_reaction_time_analysis.html) | [View](04_reaction_time_analysis.pdf) · [Download PDF](https://raw.githubusercontent.com/livioivil/DataViz/main/04_reaction_time_analysis.pdf) | [Rmd](04_reaction_time_analysis.Rmd) |
 | 05 | **Boxplots: from distributions to models**<br>Outliers.. it depends on the model. | [Download HTML](https://raw.githubusercontent.com/livioivil/DataViz/main/05_boxplots_from_distributions_to_models.html) | [View](05_boxplots_from_distributions_to_models.pdf) · [Download PDF](https://raw.githubusercontent.com/livioivil/DataViz/main/05_boxplots_from_distributions_to_models.pdf) | [Rmd](05_boxplots_from_distributions_to_models.Rmd) |
 | 06 | **Activity 3 · unusual compared with what?**<br>Outliers.. it depends on the context. | [Download HTML](https://raw.githubusercontent.com/livioivil/DataViz/main/06_student_activity3_boxplots.html) | [View](06_student_activity3_boxplots.pdf) · [Download PDF](https://raw.githubusercontent.com/livioivil/DataViz/main/06_student_activity3_boxplots.pdf) | [Rmd](06_student_activity3_boxplots.Rmd) |
-
+| 07 | **Kernel Density Estimation: bandwidth and sample size**<br>Explore bandwidth, sample size, kernel shapes, and boundary effects through real data and simulations. | [Download HTML](https://raw.githubusercontent.com/livioivil/DataViz/main/07_kde_bandwidth_sample_size.html) | — | [Rmd](07_kde_bandwidth_sample_size.Rmd) |
 
 ## Additional materials
 
@@ -51,6 +51,5 @@ You do not need R to read HTML or PDF files. To complete the coding activities, 
 | **Memory, hippocampus, and age groups** | A variant with age groups; not yet assigned to a course unit. | [CSV](https://raw.githubusercontent.com/livioivil/DataViz/main/data/hippocampus_memory_age_group.csv) |
 
 These CSV files are used in teaching activities. Consult the relevant unit for the scenario, variable definitions, and limits of interpretation. Record the version of the materials you use so that your analysis can be reproduced.
-
 
 To report an error, open an [Issue](https://github.com/livioivil/DataViz/issues) and specify the unit, file, and problem. Do not include personal data or other students' work.

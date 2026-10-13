@@ -44,7 +44,7 @@ The course is updated throughout the term: units, activities, and materials may 
 - **Entire course:** [download the repository ZIP](${zip}) and extract it before opening the files. Keep the data/ folder and repository structure intact when working with the code.
 - **Browsable catalogue:** after downloading, open [index.html](index.html) in your browser to browse the materials and download individual files. GitHub's repository view displays HTML as source code.
 
-You do not need R to read HTML or PDF files. To complete the coding activities, you need basic knowledge of R and descriptive statistics, R, and an editor such as RStudio. Open [didactic_materials.Rproj](didactic_materials.Rproj) from the course folder and follow the package requirements listed in each unit.
+You do not need R to read HTML or PDF files. To complete the coding activities, you need basic knowledge of R and descriptive statistics, R, and an editor such as RStudio. Open [DataViz.Rproj](DataViz.Rproj) from the course folder and follow the package requirements listed in each unit.
 
 ## Learning objectives
 
@@ -63,14 +63,6 @@ ${course.datasets.map(dataset => `| **${dataset.title}** | ${dataset.description
 
 These CSV files are used in teaching activities. Consult the relevant unit for the scenario, variable definitions, and limits of interpretation. Record the version of the materials you use so that your analysis can be reproduced.
 
-## Working on activities
-
-1. Read the assignment and define your question before choosing charts.
-2. Keep your code, the data used, and the reasoning behind your choices.
-3. Check plots and results, and discuss the limits of your conclusions.
-4. Consult feedback and worked examples after your own attempt. If you use an AI assistant, document its contribution and verify the code, as required in Activity 2.
-
-The instructor will provide the schedule, submission instructions, and assessment criteria.
 To report an error, open an [Issue](${repo}/issues) and specify the unit, file, and problem. Do not include personal data or other students' work.
 `;
 
