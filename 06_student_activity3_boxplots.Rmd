@@ -1,8 +1,11 @@
 ---
-title: "Student activity 3: unusual compared with what?"
-subtitle: "Boxplots, regression residuals and influential observations"
-author: "Group members: replace with your names"
+title: 'Student activity 3: unusual compared with what?'
+author: 'Group members: replace with your names'
+subtitle: Boxplots, regression residuals and influential observations
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '2'
   html_document:
     toc: true
     toc_float: true

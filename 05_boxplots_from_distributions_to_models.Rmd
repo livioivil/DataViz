@@ -1,8 +1,11 @@
 ---
-title: "Boxplots: from distributions to models"
+title: 'Boxplots: from distributions to models'
 author: "Livio Finos, University of Padova"
-subtitle: "A Course on Data Visualization · Group Activity"
+subtitle: A Course on Data Visualization
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
   html_document:
     toc: true
     toc_float: true
