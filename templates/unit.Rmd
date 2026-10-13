@@ -1,0 +1,42 @@
+---
+title: "Unit title"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    self_contained: true
+    code_folding: show
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = FALSE,
+                     fig.width = 8, fig.height = 5)
+```
+
+# Learning objectives
+
+<!-- State what students will be able to do by the end of the unit. -->
+
+# Prerequisites and materials
+
+<!-- List required knowledge, R packages, and dataset paths. -->
+
+# Concepts and examples
+
+<!-- Explain chart choices and provide reproducible examples. -->
+
+# Activity
+
+<!-- Define the question, steps, expected deliverable, and review criteria. -->
+
+# Self-assessment questions
+
+<!-- Add questions to check understanding. -->
+
+# References and attribution
+
+<!-- Document sources, datasets, images, and their usage rights. -->

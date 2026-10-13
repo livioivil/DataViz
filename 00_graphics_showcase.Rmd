@@ -1,0 +1,1852 @@
+---
+title: "R Graphics Showcase — from Statistical Basics to Showpiece Visualisations"
+author: "Livio Finos, University of Padova"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+    code_folding: show
+    theme: flatly
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.width = 8,
+  fig.height = 5
+)
+
+library(tidyverse)
+library(scales)
+
+theme_set(theme_minimal(base_size = 13))
+
+cars <- mtcars |>
+  as_tibble(rownames = "model") |>
+  mutate(
+    cyl = factor(cyl),
+    am = factor(am, labels = c("Automatic", "Manual")),
+    gear = factor(gear)
+  )
+
+has_pkg <- function(pkg) {
+  requireNamespace(pkg, quietly = TRUE)
+}
+```
+
+# How to use this showcase
+
+This document is a **visual catalogue for a statistics course**. It is deliberately broader than a conventional introduction to `ggplot2`: the first sections cover statistical graphics that students should be able to read and construct routinely; later sections show more specialised displays for uncertainty, multivariate structure, flows, hierarchies, repeated measurements, spatial data and interactive exploration.
+
+The aim is not to encourage students to use the most spectacular graphic available. The guiding question is always:
+
+> **What comparison should the reader be able to make?**
+
+A sophisticated graphic is useful only when its visual structure matches the statistical structure of the problem.
+
+Most examples use datasets distributed with R or `ggplot2`. A few advanced examples require optional packages. The document checks whether these packages are installed before evaluating those examples, so the rest of the file can still knit.
+
+## Optional packages
+
+The following packages extend the showcase.
+
+```{r optional-packages, eval=FALSE}
+install.packages(c(
+  "hexbin",
+  "ggbeeswarm",
+  "ggridges",
+  "ggdist",
+  "GGally",
+  "treemapify",
+  "ggalluvial",
+  "circlize",
+  "plotly",
+  "maps"
+))
+```
+
+# Visualization as statistical reasoning
+
+A visualization can play several roles in an analysis. It may be used to discover structure, diagnose a model, compare groups, communicate an estimate, reveal uncertainty, or guide a reader toward a particular comparison.
+
+This is why plotting is not simply the final decorative stage of an analysis. A plot can change the statistical question itself.
+
+## Exploratory and explanatory graphics
+
+An **exploratory graphic** is mainly for the analyst. We may try several scales, groupings, transformations and views because the purpose is discovery.
+
+An **explanatory graphic** is designed for an audience. The analyst has already identified an important pattern or comparison and uses visual hierarchy, annotation and simplification to help the reader see it.
+
+A useful summary is:
+
+> **Explore broadly; explain selectively.**
+
+# A short guide to graphical perception
+
+Not all visual encodings are equally easy to decode. Comparisons based on **position along a common scale** are generally more precise than comparisons based on angle, area, volume or colour intensity.
+
+This has practical consequences:
+
+- bars and dot plots are often easier to compare than pie slices;
+- aligned confidence intervals are easier to compare than differently sized circles;
+- colour is excellent for grouping and highlighting, but usually poor for communicating small quantitative differences;
+- a visually impressive chart can still be statistically inefficient.
+
+The advanced circular and flow graphics later in this document should therefore be viewed as **special-purpose tools**, not automatic replacements for simpler charts.
+
+## Colour, hierarchy and accessibility
+
+Colour can establish hierarchy, encode groups and direct attention. Good practice includes:
+
+- use qualitative palettes for unordered categories;
+- use sequential palettes for ordered magnitudes;
+- use diverging palettes when values meaningfully depart from a reference point;
+- avoid relying on red versus green alone;
+- use labels, position, shape or line type when redundant encoding improves accessibility.
+
+Viridis scales are useful because they are perceptually well behaved and remain interpretable under many forms of colour-vision deficiency.
+
+```{r viridis-example}
+ggplot(mpg, aes(displ, hwy, colour = cty)) +
+  geom_point(size = 3) +
+  scale_colour_viridis_c() +
+  labs(
+    title = "Continuous colour scale",
+    x = "Engine displacement (litres)",
+    y = "Highway miles per gallon",
+    colour = "City mpg"
+  )
+```
+
+# The grammar of graphics
+
+A `ggplot2` graphic can be thought of as a composition of:
+
+1. **data**;
+2. **aesthetic mappings**;
+3. **geometries**;
+4. **statistical transformations**;
+5. **scales**;
+6. **coordinate systems**;
+7. **facets**;
+8. **annotations and theme elements**.
+
+The same dataset can therefore produce very different representations simply by changing the geometry, statistical transformation or coordinate system.
+
+```{r grammar-basic}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point()
+```
+
+```{r grammar-layered}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point(alpha = 0.4) +
+  geom_smooth(method = "lm") +
+  labs(
+    title = "A graphic as a sequence of layers",
+    x = "Engine displacement",
+    y = "Highway mpg"
+  )
+```
+
+# Categorical data
+
+## Bar chart
+
+A bar chart represents counts or pre-computed quantities using length. Because all bars share a common baseline, comparisons are usually accurate and rapid.
+
+Use it when the main question concerns **how frequent categories are** or **how a quantity differs across categories**.
+
+```{r bar}
+ggplot(mpg, aes(class)) +
+  geom_bar() +
+  labs(
+    title = "Number of vehicles by class",
+    x = "Vehicle class",
+    y = "Count"
+  )
+```
+
+## Ordered bar chart
+
+Ordering categories by frequency often reveals structure that alphabetical order hides.
+
+```{r ordered-bar}
+ggplot(mpg, aes(fct_infreq(class))) +
+  geom_bar() +
+  coord_flip() +
+  labs(
+    title = "Vehicle classes ordered by frequency",
+    x = NULL,
+    y = "Count"
+  )
+```
+
+## Grouped bar chart
+
+Grouped bars support direct comparisons between subgroups within each category. They become difficult to read when either dimension has many levels.
+
+```{r grouped-bar}
+ggplot(mpg, aes(class, fill = drv)) +
+  geom_bar(position = "dodge") +
+  labs(
+    title = "Vehicle class by drive type",
+    x = "Vehicle class",
+    y = "Count",
+    fill = "Drive"
+  )
+```
+
+Is there anything awkward here? What about this one?
+
+
+```{r grouped-bar-fix}
+ggplot(mpg, aes(class, fill = drv)) +
+  geom_bar(position = position_dodge(preserve = "single")) +
+  labs(
+    title = "Vehicle class by drive type",
+    x = "Vehicle class",
+    y = "Count",
+    fill = "Drive"
+  )
+```
+
+
+## Proportional stacked bars
+
+`position = "fill"` converts counts into within-category proportions. This is useful for comparing **composition**, but absolute sample sizes disappear.
+
+```{r proportional-bar}
+ggplot(mpg, aes(class, fill = drv)) +
+  geom_bar(position = "fill") +
+  scale_y_continuous(labels = percent) +
+  labs(
+    title = "Composition of vehicle classes",
+    x = "Vehicle class",
+    y = "Proportion",
+    fill = "Drive"
+  )
+```
+
+## Mosaic plot
+
+A mosaic plot represents a contingency table using rectangle areas. It is useful when both variables are categorical and the goal is to inspect dependence.
+
+Because area is less precisely decoded than aligned position, proportional bar charts may be preferable when exact comparisons matter.
+
+```{r mosaic}
+mosaicplot(
+  table(mpg$class, mpg$drv),
+  main = "Vehicle class and drive type",
+  xlab = "Vehicle class",
+  ylab = "Drive type"
+)
+```
+
+# Univariate quantitative distributions
+
+## Histogram
+
+A histogram groups values into intervals. The bin width is therefore part of the statistical representation.
+
+Always inspect more than one sensible bin width before making claims about modes, gaps or skewness.
+
+```{r histogram}
+ggplot(diamonds, aes(price)) +
+  geom_histogram(binwidth = 500) +
+  labs(
+    title = "Distribution of diamond prices",
+    x = "Price",
+    y = "Count"
+  )
+```
+
+```{r histogram-bins}
+ggplot(diamonds, aes(price)) +
+  geom_histogram(binwidth = 1200) +
+  labs(
+    title = "The same observations with wider bins",
+    x = "Price",
+    y = "Count"
+  )
+```
+
+## Density plot
+
+A kernel density estimate replaces bins with a smooth curve. Its bandwidth controls the trade-off between local detail and smoothing.
+
+A density curve is an **estimate of distributional shape**, not the raw data themselves.
+
+```{r density}
+ggplot(diamonds, aes(price)) +
+  geom_density(fill = "grey80") +
+  labs(
+    title = "Kernel density estimate",
+    x = "Price",
+    y = "Density"
+  )
+```
+
+## Empirical cumulative distribution function
+
+The ECDF shows the proportion of observations less than or equal to each value. Unlike histograms and density estimates, it requires no bin-width or bandwidth choice.
+
+It is particularly useful when quantiles and stochastic ordering matter.
+
+```{r ecdf}
+ggplot(diamonds, aes(price)) +
+  stat_ecdf() +
+  labs(
+    title = "Empirical cumulative distribution",
+    x = "Price",
+    y = "Cumulative proportion"
+  )
+```
+
+## Boxplot
+
+A boxplot compresses a distribution into quartiles, median, whiskers and potential outliers.
+
+It is excellent for compact comparisons across groups, but can conceal multimodality and sample size.
+
+```{r boxplot}
+ggplot(mpg, aes(class, hwy)) +
+  geom_boxplot() +
+  coord_flip() +
+  labs(
+    title = "Highway fuel economy by vehicle class",
+    x = NULL,
+    y = "Highway mpg"
+  )
+```
+
+## Boxplot plus observations
+
+Adding jittered observations restores information about sample size and local structure.
+
+```{r box-jitter}
+ggplot(mpg, aes(class, hwy)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(width = 0.15, alpha = 0.35) +
+  coord_flip() +
+  labs(
+    title = "Boxplots plus individual observations",
+    x = NULL,
+    y = "Highway mpg"
+  )
+```
+
+## Violin plot
+
+A violin plot mirrors a density estimate around a central axis. It communicates distributional shape more directly than a boxplot, but its appearance depends on smoothing.
+
+Combining a violin with a boxplot gives both shape and familiar summary statistics.
+
+```{r violin}
+ggplot(mpg, aes(class, hwy)) +
+  geom_violin(trim = FALSE) +
+  geom_boxplot(width = 0.12, outlier.shape = NA) +
+  coord_flip() +
+  labs(
+    title = "Violin plots with embedded boxplots",
+    x = NULL,
+    y = "Highway mpg"
+  )
+```
+
+## Beeswarm / quasirandom plot
+
+A beeswarm-like display keeps individual observations visible while reducing overlap. It is especially useful for small or medium-sized samples.
+
+```{r beeswarm}
+if (has_pkg("ggbeeswarm")) {
+  ggplot(iris, aes(Species, Sepal.Length)) +
+    ggbeeswarm::geom_quasirandom(width = 0.22, alpha = 0.7) +
+    labs(
+      title = "Quasirandom point layout",
+      x = NULL,
+      y = "Sepal length"
+    )
+}
+```
+
+## Ridgeline plot
+
+Ridgeline plots stack density curves vertically. They work well for comparing many related distributions, especially when the ordering of groups has substantive meaning.
+
+Avoid them when precise vertical comparison of densities is required.
+
+```{r ridgeline}
+if (has_pkg("ggridges")) {
+  ggplot(
+    ggridges::lincoln_weather,
+    aes(x = `Mean Temperature [F]`, y = Month)
+  ) +
+    ggridges::geom_density_ridges(
+      scale = 2.4,
+      alpha = 0.7
+    ) +
+    labs(
+      title = "Ridgeline plot of monthly temperatures",
+      x = "Mean temperature (F)",
+      y = NULL
+    )
+}
+```
+
+## Raincloud-style plot
+
+Raincloud plots combine distribution shape, uncertainty/summary and raw observations. They are useful when you want to avoid choosing between a violin plot, boxplot and dot plot.
+
+```{r raincloud}
+if (has_pkg("ggdist")) {
+  ggplot(
+    iris,
+    aes(x = Sepal.Length, y = Species, fill = Species)
+  ) +
+    ggdist::stat_halfeye(
+      adjust = 0.6,
+      width = 0.6,
+      .width = 0,
+      justification = -0.25,
+      point_colour = NA
+    ) +
+    geom_boxplot(
+      width = 0.13,
+      outlier.shape = NA,
+      alpha = 0.5
+    ) +
+    geom_jitter(
+      height = 0.08,
+      width = 0,
+      alpha = 0.25,
+      size = 1
+    ) +
+    guides(fill = "none") +
+    labs(
+      title = "Raincloud-style distribution comparison",
+      x = "Sepal length",
+      y = NULL
+    )
+}
+```
+
+# Relationships between quantitative variables
+
+## Scatter plot
+
+The scatter plot is the default display for two quantitative variables because it preserves individual observations and uses position on common scales.
+
+Look for direction, strength, nonlinearity, clusters, gaps and influential observations.
+
+```{r scatter}
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(size = 3) +
+  labs(
+    title = "Weight and fuel economy",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon"
+  )
+```
+
+## Linear trend and confidence band
+
+A fitted line summarizes an assumed linear relationship. The confidence band describes uncertainty about the estimated mean relationship, not the range of future observations.
+
+```{r scatter-lm}
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm") +
+  labs(
+    title = "Linear trend with confidence band",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon"
+  )
+```
+
+## Non-parametric smoother
+
+A smoother is useful during exploration because it can reveal nonlinear structure without forcing a straight line.
+
+Its shape depends on smoothing parameters, so it should not be treated as an unquestionable representation of the underlying process.
+
+```{r scatter-loess}
+ggplot(mpg, aes(displ, hwy)) +
+  geom_point(alpha = 0.35) +
+  geom_smooth(se = FALSE) +
+  labs(
+    title = "Exploratory smoother",
+    x = "Engine displacement",
+    y = "Highway mpg"
+  )
+```
+
+## Colour, size and shape
+
+Additional aesthetics can encode more variables, but each extra encoding increases cognitive load.
+
+Use colour for grouping, shape for a small number of categories, and size only when approximate magnitude comparisons are sufficient.
+
+```{r multiencoding}
+ggplot(cars, aes(wt, mpg, colour = cyl, shape = am, size = hp)) +
+  geom_point(alpha = 0.75) +
+  labs(
+    title = "Multiple aesthetic encodings",
+    colour = "Cylinders",
+    shape = "Transmission",
+    size = "Horsepower"
+  )
+```
+
+## Faceting
+
+Small multiples repeat the same simple graphic across subgroups. They are often clearer than trying to encode every group with colour or shape in one panel.
+
+```{r facet}
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(size = 2.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~ cyl) +
+  labs(
+    title = "Relationship within cylinder groups",
+    x = "Weight",
+    y = "Miles per gallon"
+  )
+```
+
+# Dense relationships and overplotting
+
+## Transparency
+
+Transparency lets repeated or nearby observations build visual density.
+
+```{r alpha}
+ggplot(diamonds, aes(carat, price)) +
+  geom_point(alpha = 0.06) +
+  labs(
+    title = "Transparency for dense scatter plots",
+    x = "Carat",
+    y = "Price"
+  )
+```
+
+## Two-dimensional bins
+
+Instead of drawing every point, `geom_bin_2d()` counts observations inside rectangular cells.
+
+This changes the question from "where is each observation?" to "where is the mass of the data?"
+
+```{r bin2d}
+ggplot(diamonds, aes(carat, price)) +
+  geom_bin_2d(bins = 45) +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Two-dimensional binning",
+    x = "Carat",
+    y = "Price",
+    fill = "Count"
+  )
+```
+
+## Hexagonal binning
+
+Hexagons reduce some directional artefacts of rectangular grids and are popular for very large scatter plots.
+
+```{r hexbin}
+if (has_pkg("hexbin")) {
+  ggplot(diamonds, aes(carat, price)) +
+    geom_hex(bins = 45) +
+    scale_fill_viridis_c() +
+    labs(
+      title = "Hexagonal binning",
+      x = "Carat",
+      y = "Price",
+      fill = "Count"
+    )
+}
+```
+
+## Two-dimensional density contours
+
+Contours summarize regions of similar estimated density. They are useful for seeing clusters and shape in dense bivariate data.
+
+```{r density2d}
+ggplot(diamonds, aes(carat, price)) +
+  geom_density_2d() +
+  labs(
+    title = "Two-dimensional density contours",
+    x = "Carat",
+    y = "Price"
+  )
+```
+
+# Time series and ordered data
+
+## Line chart
+
+Connecting observations with lines is appropriate when the horizontal dimension is ordered and continuity is meaningful.
+
+```{r line}
+ggplot(economics, aes(date, unemploy)) +
+  geom_line() +
+  labs(
+    title = "US unemployment over time",
+    x = NULL,
+    y = "Number unemployed (thousands)"
+  )
+```
+
+## Area chart
+
+An area chart emphasizes accumulated magnitude relative to a baseline. It is visually stronger than a line chart, which can be useful when magnitude is central but distracting when trend is the main message.
+
+```{r area}
+ggplot(economics, aes(date, unemploy)) +
+  geom_area() +
+  labs(
+    title = "Area chart",
+    x = NULL,
+    y = "Number unemployed (thousands)"
+  )
+```
+
+## Step chart
+
+A step chart is appropriate when values remain constant until a discrete change occurs.
+
+```{r step}
+ggplot(head(economics, 80), aes(date, uempmed)) +
+  geom_step() +
+  labs(
+    title = "Step representation",
+    x = NULL,
+    y = "Median unemployment duration"
+  )
+```
+
+## Bump chart
+
+Bump charts show how ranks change over time. They are useful when **relative position** matters more than the raw quantity.
+
+Here annual housing sales are ranked within a small selection of cities.
+
+```{r bump}
+# EuStockMarkets is included with R.
+# We convert each index to performance relative to its initial value.
+
+stock_data <- EuStockMarkets |>
+  as.data.frame() |>
+  mutate(
+    time = time(EuStockMarkets),
+    year = floor(time)
+  ) |>
+  as_tibble() |>
+  pivot_longer(
+    cols = c(DAX, SMI, CAC, FTSE),
+    names_to = "index",
+    values_to = "value"
+  ) |>
+  group_by(index) |>
+  mutate(
+    performance = 100 * value / first(value)
+  ) |>
+  ungroup()
+
+# Use the last available observation of each year
+stock_rank <- stock_data |>
+  group_by(year, index) |>
+  slice_max(time, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  group_by(year) |>
+  mutate(
+    rank = rank(-performance, ties.method = "first")
+  ) |>
+  ungroup()
+
+ggplot(
+  stock_rank,
+  aes(
+    x = year,
+    y = rank,
+    group = index,
+    colour = index
+  )
+) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 3) +
+  scale_y_reverse(
+    breaks = 1:4
+  ) +
+  scale_x_continuous(
+    breaks = sort(unique(stock_rank$year))
+  ) +
+  labs(
+    title = "Bump chart: ranking of European stock-market performance",
+    subtitle = "Each index is normalised to 100 at the beginning of the period",
+    x = "Year",
+    y = "Rank",
+    colour = "Index"
+  ) +
+  theme(
+    panel.grid.minor = element_blank()
+  )
+```
+
+# Comparing categories and quantities efficiently
+
+## Cleveland dot plot
+
+Dot plots use position rather than bar length and can be especially effective when values do not need a zero baseline.
+
+```{r cleveland}
+manufacturer_mpg <- mpg |>
+  group_by(manufacturer) |>
+  summarise(mean_hwy = mean(hwy), .groups = "drop")
+
+ggplot(
+  manufacturer_mpg,
+  aes(mean_hwy, fct_reorder(manufacturer, mean_hwy))
+) +
+  geom_point(size = 3) +
+  labs(
+    title = "Mean highway mpg by manufacturer",
+    x = "Mean highway mpg",
+    y = NULL
+  )
+```
+
+## Lollipop chart
+
+A lollipop chart combines a point with a line to a baseline. It is visually lighter than a full bar chart but retains a strong positional cue.
+
+```{r lollipop}
+car_top <- cars |>
+  slice_max(mpg, n = 12)
+
+ggplot(car_top, aes(mpg, fct_reorder(model, mpg))) +
+  geom_segment(aes(x = 0, xend = mpg, yend = model)) +
+  geom_point(size = 3) +
+  labs(
+    title = "High-efficiency cars",
+    x = "Miles per gallon",
+    y = NULL
+  )
+```
+
+## Dumbbell plot
+
+A dumbbell plot highlights the difference between two measurements for each group. It is more direct than grouped bars when the within-group gap is the main quantity of interest.
+
+```{r dumbbell}
+comparison <- mpg |>
+  group_by(manufacturer) |>
+  summarise(
+    city = mean(cty),
+    highway = mean(hwy),
+    .groups = "drop"
+  ) |>
+  slice_max(highway, n = 10) |>
+  mutate(manufacturer = fct_reorder(manufacturer, highway))
+
+ggplot(comparison, aes(y = manufacturer)) +
+  geom_segment(
+    aes(x = city, xend = highway, yend = manufacturer)
+  ) +
+  geom_point(aes(x = city), shape = 1, size = 3) +
+  geom_point(aes(x = highway), size = 3) +
+  labs(
+    title = "City versus highway fuel economy",
+    subtitle = "Open point = city; filled point = highway",
+    x = "Miles per gallon",
+    y = NULL
+  )
+```
+
+## Slope chart
+
+Slope charts are ideal for "before versus after" comparisons. The direction and steepness of each line encode change.
+
+```{r slope}
+slope_data <- comparison |>
+  select(manufacturer, city, highway) |>
+  pivot_longer(
+    c(city, highway),
+    names_to = "condition",
+    values_to = "mpg"
+  ) |>
+  mutate(
+    condition = factor(
+      condition,
+      levels = c("city", "highway")
+    )
+  )
+
+ggplot(slope_data, aes(condition, mpg, group = manufacturer)) +
+  geom_line(alpha = 0.6) +
+  geom_point(size = 2.2) +
+  labs(
+    title = "Slope chart",
+    x = NULL,
+    y = "Mean mpg"
+  )
+```
+
+# Heatmaps and matrices
+
+## Count heatmap
+
+Heatmaps encode a matrix through colour. They are compact and useful for pattern detection, but exact comparisons are difficult without labels.
+
+```{r heatmap}
+heat <- mpg |>
+  count(class, drv)
+
+ggplot(heat, aes(drv, class, fill = n)) +
+  geom_tile() +
+  geom_text(aes(label = n)) +
+  scale_fill_viridis_c() +
+  labs(
+    title = "Counts by class and drive type",
+    x = "Drive type",
+    y = "Vehicle class",
+    fill = "Count"
+  )
+```
+
+## Correlation heatmap
+
+A correlation matrix is naturally stored as a square matrix, whereas `ggplot2` works most naturally with one pair of variables per row. We therefore convert the matrix to long format before plotting.
+
+The heatmap is useful for scanning broad correlation structure. The printed coefficients retain numerical precision.
+
+```{r correlation-heatmap}
+vars <- c("mpg", "disp", "hp", "drat", "wt", "qsec")
+
+cor_long <- cars |>
+  select(all_of(vars)) |>
+  cor() |>
+  as.data.frame() |>
+  rownames_to_column("var1") |>
+  pivot_longer(
+    cols = -var1,
+    names_to = "var2",
+    values_to = "correlation"
+  ) |>
+  mutate(
+    var1 = factor(var1, levels = rev(vars)),
+    var2 = factor(var2, levels = vars)
+  )
+
+ggplot(cor_long, aes(var2, var1, fill = correlation)) +
+  geom_tile() +
+  geom_text(
+    aes(label = round(correlation, 2)),
+    size = 3
+  ) +
+  scale_fill_gradient2(
+    low = "navy",
+    mid = "white",
+    high = "firebrick",
+    midpoint = 0,
+    limits = c(-1, 1)
+  ) +
+  coord_equal() +
+  labs(
+    title = "Correlation matrix",
+    x = NULL,
+    y = NULL,
+    fill = "r"
+  )
+```
+
+# Uncertainty and statistical estimates
+
+## Means with confidence intervals
+
+An interval plot emphasizes an **estimate and its uncertainty** rather than the distribution of individual observations.
+
+Confidence intervals for a mean should not be interpreted as ranges containing 95% of the observations.
+
+```{r mean-ci}
+iris_summary <- as_tibble(iris) |>
+  group_by(Species) |>
+  summarise(
+    n = n(),
+    mean = mean(Sepal.Length),
+    se = sd(Sepal.Length) / sqrt(n),
+    lower = mean - qt(0.975, n - 1) * se,
+    upper = mean + qt(0.975, n - 1) * se,
+    .groups = "drop"
+  )
+
+ggplot(iris_summary, aes(Species, mean)) +
+  geom_point(size = 3) +
+  geom_errorbar(
+    aes(ymin = lower, ymax = upper),
+    width = 0.15
+  ) +
+  labs(
+    title = "Mean sepal length with 95% confidence intervals",
+    x = NULL,
+    y = "Mean sepal length"
+  )
+```
+
+## Forest / coefficient plot
+
+A coefficient plot is a compact way to present several model estimates and their intervals. The vertical reference at zero makes sign and compatibility with a null effect easy to inspect.
+
+```{r forest}
+fit <- lm(mpg ~ wt + hp + qsec, data = cars)
+
+coef_table <- summary(fit)$coefficients |>
+  as.data.frame() |>
+  rownames_to_column("term") |>
+  as_tibble() |>
+  filter(term != "(Intercept)") |>
+  transmute(
+    term,
+    estimate = Estimate,
+    se = `Std. Error`,
+    lower = estimate - 1.96 * se,
+    upper = estimate + 1.96 * se
+  )
+
+ggplot(
+  coef_table,
+  aes(estimate, fct_reorder(term, estimate))
+) +
+  geom_vline(xintercept = 0, linetype = 2) +
+  geom_pointrange(
+    aes(xmin = lower, xmax = upper)
+  ) +
+  labs(
+    title = "Regression coefficient plot",
+    subtitle = "Point estimates with approximate 95% intervals",
+    x = "Coefficient",
+    y = NULL
+  )
+```
+
+## Funnel-style plot
+
+Funnel plots visualize how sampling variability changes with precision or sample size. They are common in meta-analysis and quality monitoring.
+
+This simulated example focuses on the geometry rather than a formal publication-bias analysis.
+
+```{r funnel}
+set.seed(21)
+
+funnel <- tibble(
+  n = sample(20:500, 160, replace = TRUE),
+  estimate = rnorm(
+    160,
+    mean = 0.25,
+    sd = 1 / sqrt(n / 20)
+  )
+)
+
+ggplot(funnel, aes(estimate, sqrt(n))) +
+  geom_point(alpha = 0.55) +
+  geom_vline(xintercept = 0.25, linetype = 2) +
+  labs(
+    title = "Funnel-style display",
+    x = "Estimate",
+    y = "Square root of sample size"
+  )
+```
+
+# Model diagnostics
+
+## Q-Q plot
+
+A Q-Q plot compares empirical quantiles with theoretical normal quantiles. Systematic curvature is more informative than small random deviations.
+
+```{r qq}
+ggplot(cars, aes(sample = mpg)) +
+  stat_qq() +
+  stat_qq_line() +
+  labs(title = "Normal Q-Q plot")
+```
+
+## Residuals versus fitted values
+
+This diagnostic helps detect nonlinearity, changing residual variance and unusual observations.
+
+A smooth trend should ideally remain close to zero if the mean structure is adequately represented.
+
+```{r residuals}
+fit2 <- lm(mpg ~ wt + hp, data = cars)
+
+diag <- tibble(
+  fitted = fitted(fit2),
+  residual = residuals(fit2)
+)
+
+ggplot(diag, aes(fitted, residual)) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_point(size = 2.5) +
+  geom_smooth(se = FALSE) +
+  labs(
+    title = "Residuals versus fitted values",
+    x = "Fitted value",
+    y = "Residual"
+  )
+```
+
+## Bland-Altman-style agreement plot
+
+Two measurement methods can be highly correlated while disagreeing systematically. A Bland-Altman plot focuses directly on **differences between methods**.
+
+```{r bland-altman}
+set.seed(12)
+
+methods <- tibble(
+  method_a = rnorm(80, 50, 8),
+  method_b = method_a + rnorm(80, 1.5, 4)
+) |>
+  mutate(
+    average = (method_a + method_b) / 2,
+    difference = method_b - method_a
+  )
+
+md <- mean(methods$difference)
+sd_d <- sd(methods$difference)
+
+ggplot(methods, aes(average, difference)) +
+  geom_point() +
+  geom_hline(yintercept = md) +
+  geom_hline(
+    yintercept = md + 1.96 * sd_d,
+    linetype = 2
+  ) +
+  geom_hline(
+    yintercept = md - 1.96 * sd_d,
+    linetype = 2
+  ) +
+  labs(
+    title = "Bland-Altman-style agreement plot",
+    x = "Average of methods",
+    y = "Method B - Method A"
+  )
+```
+
+# Repeated measurements and trajectories
+
+## Spaghetti plot
+
+A spaghetti plot draws one trajectory per observational unit. It preserves individual heterogeneity that a mean trajectory would hide.
+
+The limitation is visual clutter: with hundreds of subjects, sampling or partial transparency is usually necessary.
+
+```{r spaghetti}
+set.seed(4)
+
+longitudinal <- crossing(
+  id = factor(1:18),
+  time = 0:6
+) |>
+  mutate(
+    random_intercept = rep(rnorm(18, 0, 3), each = 7),
+    outcome =
+      15 + 1.4 * time +
+      random_intercept +
+      rnorm(n(), 0, 1.5)
+  )
+
+ggplot(longitudinal, aes(time, outcome, group = id)) +
+  geom_line(alpha = 0.4) +
+  geom_point(size = 1) +
+  labs(
+    title = "Individual longitudinal trajectories",
+    x = "Time",
+    y = "Outcome"
+  )
+```
+
+## Mean trajectory with uncertainty ribbon
+
+A ribbon displays a continuous interval around a curve. It is efficient for uncertainty that changes over time.
+
+```{r ribbon}
+ribbon_data <- longitudinal |>
+  group_by(time) |>
+  summarise(
+    mean = mean(outcome),
+    se = sd(outcome) / sqrt(n()),
+    lower = mean - 1.96 * se,
+    upper = mean + 1.96 * se,
+    .groups = "drop"
+  )
+
+ggplot(ribbon_data, aes(time, mean)) +
+  geom_ribbon(
+    aes(ymin = lower, ymax = upper),
+    alpha = 0.2
+  ) +
+  geom_line(linewidth = 1) +
+  labs(
+    title = "Mean trajectory with uncertainty ribbon",
+    x = "Time",
+    y = "Mean outcome"
+  )
+```
+
+# Multivariate data
+
+## Scatterplot matrix
+
+A scatterplot matrix displays all pairwise relationships among several variables. It is useful during exploratory analysis but becomes visually expensive as the number of variables grows.
+
+```{r pairs}
+if (has_pkg("GGally")) {
+  GGally::ggpairs(
+    iris,
+    columns = 1:4,
+    aes(colour = Species, alpha = 0.6)
+  )
+}
+```
+
+## PCA score plot
+
+Principal component analysis rotates a multivariate dataset into directions of decreasing variance. A score plot displays observations in the new coordinate system.
+
+Interpretation should consider how much variance the shown components explain and what loadings define those components.
+
+```{r pca}
+pca <- prcomp(
+  iris |>
+    select(where(is.numeric)),
+  scale. = TRUE
+)
+
+pca_scores <- as_tibble(pca$x[, 1:2]) |>
+  mutate(Species = iris$Species)
+
+ggplot(pca_scores, aes(PC1, PC2, colour = Species)) +
+  geom_point(size = 2.5) +
+  coord_equal() +
+  labs(title = "PCA score plot")
+```
+
+## Convex hulls
+
+Convex hulls outline the smallest convex region containing each group. They are descriptive envelopes, **not confidence regions**.
+
+```{r hulls}
+hulls <- pca_scores |>
+  group_by(Species) |>
+  slice(chull(PC1, PC2)) |>
+  ungroup()
+
+ggplot(pca_scores, aes(PC1, PC2, colour = Species)) +
+  geom_polygon(
+    data = hulls,
+    aes(fill = Species, group = Species),
+    alpha = 0.12,
+    colour = NA
+  ) +
+  geom_point(size = 2.5) +
+  coord_equal() +
+  labs(title = "PCA groups with convex hulls")
+```
+
+## Parallel-coordinate-style display
+
+Parallel coordinates represent each observation as a line crossing several variable axes. Standardisation is essential when variables use different units.
+
+This display is useful for identifying profile shapes, but individual line tracing becomes difficult with many observations.
+
+```{r parallel}
+parallel_data <- cars |>
+  slice_head(n = 10) |>
+  select(model, mpg, wt, hp, qsec) |>
+  mutate(
+    across(-model, ~ as.numeric(scale(.x)))
+  ) |>
+  pivot_longer(
+    -model,
+    names_to = "variable",
+    values_to = "z"
+  )
+
+ggplot(parallel_data, aes(variable, z, group = model)) +
+  geom_line(alpha = 0.5) +
+  geom_point(size = 1.3) +
+  labs(
+    title = "Parallel-coordinate-style profiles",
+    x = NULL,
+    y = "Standardised value"
+  )
+```
+
+# Radar / spider plot
+
+Radar charts represent a multivariate profile around radial axes. They can be visually memorable and useful when the focus is the **shape of a profile across a small number of variables**.
+
+They are less suitable for precise comparisons because values are read using distance and polygon shape rather than aligned Cartesian position. Always standardise variables before comparing quantities measured on different scales.
+
+Here each polygon represents the average profile of cars with 4, 6 or 8 cylinders.
+
+```{r radar, fig.width=7, fig.height=7}
+radar_data <- cars |>
+  group_by(cyl) |>
+  summarise(
+    mpg = mean(mpg),
+    hp = mean(hp),
+    wt = mean(wt),
+    qsec = mean(qsec),
+    drat = mean(drat),
+    .groups = "drop"
+  ) |>
+  pivot_longer(
+    -cyl,
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  group_by(metric) |>
+  mutate(score = rescale(value, to = c(0.1, 1))) |>
+  ungroup() |>
+  mutate(
+    metric = factor(
+      metric,
+      levels = c("mpg", "qsec", "drat", "hp", "wt")
+    )
+  )
+
+ggplot(
+  radar_data,
+  aes(metric, score, group = cyl, colour = cyl, fill = cyl)
+) +
+  geom_polygon(alpha = 0.08, linewidth = 1) +
+  geom_point(size = 2.5) +
+  coord_polar(start = -pi / 2) +
+  scale_y_continuous(
+    limits = c(0, 1),
+    breaks = seq(0.2, 1, 0.2),
+    labels = NULL
+  ) +
+  labs(
+    title = "Radar plot of standardised car profiles",
+    subtitle = "Each axis has been rescaled separately",
+    x = NULL,
+    y = NULL,
+    colour = "Cylinders",
+    fill = "Cylinders"
+  ) +
+  theme(
+    panel.grid.minor = element_blank(),
+    axis.text.y = element_blank()
+  )
+```
+
+# Circular and polar graphics
+
+Circular layouts can display composition or repeated categorical structures in a compact form. They are visually attractive but less precise than aligned Cartesian displays.
+
+Use them when the circular organization has communicative value, not simply because it looks unusual.
+
+## Polar stacked bar / radial composition chart
+
+This chart is similar in spirit to the radial example supplied with the course material: each cell type occupies an angular sector and phases are stacked radially.
+
+```{r flow-data}
+flow_data <- tribble(
+  ~CellType,          ~Phase, ~n,
+  "Ductal",           "G1",   160,
+  "Ductal",           "S",     65,
+  "Ductal",           "G2M",   28,
+  "Ngn3-high-EP",     "G1",   110,
+  "Ngn3-high-EP",     "S",     42,
+  "Ngn3-high-EP",     "G2M",   20,
+  "Endocrine",        "G1",   250,
+  "Endocrine",        "S",     55,
+  "Endocrine",        "G2M",   75,
+  "Ngn3-low-EP",      "G1",    42,
+  "Ngn3-low-EP",      "S",     15,
+  "Ngn3-low-EP",      "G2M",   12,
+  "Pre-endocrine",    "G1",    90,
+  "Pre-endocrine",    "S",     28,
+  "Pre-endocrine",    "G2M",   18
+)
+```
+
+```{r polar-stacked, fig.width=8, fig.height=7}
+ggplot(
+  flow_data,
+  aes(CellType, n, fill = Phase)
+) +
+  geom_col(width = 0.82, colour = "white") +
+  coord_polar(start = 0) +
+  labs(
+    title = "Polar stacked bar chart",
+    subtitle = "Radial height = count; fill = phase",
+    x = NULL,
+    y = "Count",
+    fill = "Phase"
+  ) +
+  theme(
+    axis.text.x = element_text(size = 10),
+    panel.grid.minor = element_blank()
+  )
+```
+find a nicer example for this lollipop chart 
+## Circular lollipop chart
+
+A conventional lollipop chart can be transformed with polar coordinates. The result emphasizes ranking and creates a compact radial layout.
+
+Again, use the ordinary Cartesian version when accurate comparison is more important than display impact.
+
+```{r circular-lollipop, fig.width=7, fig.height=7}
+circular_manufacturer <- manufacturer_mpg |>
+  arrange(mean_hwy) |>
+  mutate(
+    manufacturer = factor(
+      manufacturer,
+      levels = manufacturer
+    )
+  )
+
+ggplot(
+  circular_manufacturer,
+  aes(manufacturer, mean_hwy)
+) +
+  geom_segment(
+    aes(
+      xend = manufacturer,
+      y = 0,
+      yend = mean_hwy
+    )
+  ) +
+  geom_point(size = 3) +
+  coord_polar() +
+  labs(
+    title = "Circular lollipop chart",
+    x = NULL,
+    y = "Mean highway mpg"
+  )
+```
+
+# Flows between categories: alluvial / Sankey plot
+
+An alluvial plot represents movement or composition between categorical stages. Ribbon width encodes quantity.
+
+These plots are powerful when the central question is **where units flow from and to**. They become difficult to read with many stages, many categories or many thin ribbons.
+
+The example below uses the same synthetic cell-type/phase table as the polar chart, allowing the two representations to be compared directly.
+
+```{r alluvial, fig.width=10, fig.height=6}
+if (has_pkg("ggalluvial")) {
+  ggplot(
+    flow_data,
+    aes(
+      axis1 = CellType,
+      axis2 = Phase,
+      y = n
+    )
+  ) +
+    ggalluvial::geom_alluvium(
+      aes(fill = CellType),
+      width = 1 / 10,
+      alpha = 0.75
+    ) +
+    ggalluvial::geom_stratum(
+      width = 1 / 10,
+      fill = "grey95",
+      colour = "grey35"
+    ) +
+    ggalluvial::stat_stratum(
+      geom = "text",
+      aes(label = after_stat(stratum)),
+      size = 3.6
+    ) +
+    scale_x_discrete(
+      limits = c("Cell type", "Phase"),
+      expand = c(0.08, 0.08)
+    ) +
+    labs(
+      title = "Alluvial / Sankey-style flow diagram",
+      subtitle = "Ribbon width represents the number of observations",
+      x = NULL,
+      y = "Count",
+      fill = "Cell type"
+    ) +
+    theme(
+      panel.grid = element_blank()
+    )
+}
+```
+
+# Chord diagram
+
+A chord diagram places categories around a circle and connects them with ribbons. It is a compact representation of a many-to-many relationship and is especially effective for symmetric networks or flow matrices.
+
+The cost of the circular layout is reduced precision: exact ribbon widths are harder to compare than aligned bars. Chord diagrams are therefore best for **revealing dominant connections and network structure**, not for reading exact values.
+
+```{r chord, fig.width=8, fig.height=8}
+if (has_pkg("circlize")) {
+  flow_matrix <- xtabs(
+    n ~ CellType + Phase,
+    data = flow_data
+  )
+
+  circlize::circos.clear()
+
+  circlize::chordDiagram(
+    flow_matrix,
+    transparency = 0.25
+  )
+
+  title("Chord diagram: cell type and phase")
+
+  circlize::circos.clear()
+}
+```
+
+# Hierarchical displays
+
+## Treemap
+
+A treemap uses nested rectangles to represent part-to-whole structure. Rectangle area encodes magnitude and colour can encode another variable.
+
+Treemaps are space-efficient, but comparing similarly sized rectangles is less accurate than comparing bar lengths.
+
+```{r treemap}
+if (has_pkg("treemapify")) {
+  tree_data <- mpg |>
+    count(manufacturer, class) |>
+    group_by(manufacturer) |>
+    mutate(total = sum(n)) |>
+    ungroup()
+
+  ggplot(
+    tree_data,
+    aes(
+      area = n,
+      fill = manufacturer,
+      label = class,
+      subgroup = manufacturer
+    )
+  ) +
+    treemapify::geom_treemap() +
+    treemapify::geom_treemap_subgroup_border() +
+    treemapify::geom_treemap_text(
+      colour = "white",
+      place = "centre",
+      grow = TRUE,
+      reflow = TRUE
+    ) +
+    guides(fill = "none") +
+    labs(
+      title = "Treemap: manufacturer and vehicle class"
+    )
+}
+```
+
+## Dendrogram
+
+A dendrogram visualizes the nested structure produced by hierarchical clustering. The heights at which branches merge represent dissimilarity under the chosen clustering method.
+
+Do not interpret a clustering tree without considering the distance measure, variable scaling and linkage method that created it.
+
+```{r dendrogram}
+iris_scaled <- scale(
+  iris |>
+    select(where(is.numeric))
+)
+
+hc <- hclust(dist(iris_scaled))
+
+plot(
+  hc,
+  labels = FALSE,
+  main = "Hierarchical clustering dendrogram",
+  xlab = "Observations",
+  sub = ""
+)
+```
+
+# Network-style visualisation
+
+Networks represent entities as nodes and relationships as edges. They are appropriate when connections themselves are the data.
+
+Network graphics can become unreadable quickly. Filtering, aggregation and meaningful layout choices are usually more important than decorative styling.
+
+The following small example uses only base `ggplot2` geometry to avoid making a graph package mandatory.
+
+```{r simple-network}
+nodes <- tibble(
+  node = c("A", "B", "C", "D", "E", "F"),
+  x = c(0, 1, 2, 2, 1, 0),
+  y = c(1, 2, 1, 0, -1, 0)
+)
+
+edges <- tribble(
+  ~from, ~to, ~weight,
+  "A", "B", 4,
+  "B", "C", 7,
+  "C", "D", 3,
+  "D", "E", 5,
+  "E", "F", 2,
+  "F", "A", 6,
+  "A", "C", 2,
+  "B", "E", 3
+) |>
+  left_join(
+    nodes |> rename(from = node, x_from = x, y_from = y),
+    by = "from"
+  ) |>
+  left_join(
+    nodes |> rename(to = node, x_to = x, y_to = y),
+    by = "to"
+  )
+
+ggplot() +
+  geom_segment(
+    data = edges,
+    aes(
+      x = x_from,
+      y = y_from,
+      xend = x_to,
+      yend = y_to,
+      linewidth = weight
+    ),
+    alpha = 0.35
+  ) +
+  geom_point(
+    data = nodes,
+    aes(x, y),
+    size = 8
+  ) +
+  geom_text(
+    data = nodes,
+    aes(x, y, label = node),
+    colour = "white"
+  ) +
+  scale_linewidth(range = c(0.5, 3)) +
+  coord_equal() +
+  guides(linewidth = "none") +
+  labs(title = "Simple weighted network") +
+  theme_void()
+```
+
+# Polar composition versus Cartesian composition
+
+The same data can be drawn as conventional stacked bars or in polar coordinates. Comparing them side by side is a useful perceptual exercise.
+
+```{r composition-cartesian}
+ggplot(flow_data, aes(CellType, n, fill = Phase)) +
+  geom_col() +
+  labs(
+    title = "Cartesian stacked bars",
+    x = NULL,
+    y = "Count"
+  )
+```
+
+The Cartesian version makes aligned lengths easier to compare; the polar version emphasizes overall profile and provides more visual impact.
+
+# Logarithmic scales
+
+Log scales are useful for positive variables spanning orders of magnitude and for multiplicative relationships.
+
+A transformed scale changes the visual meaning of distance, so the transformation should always be stated explicitly.
+
+```{r log-scales}
+ggplot(diamonds, aes(carat, price)) +
+  geom_point(alpha = 0.06) +
+  scale_x_log10() +
+  scale_y_log10(labels = label_dollar()) +
+  labs(
+    title = "Carat and price on logarithmic scales",
+    x = "Carat (log scale)",
+    y = "Price (log scale)"
+  )
+```
+
+# Annotation and visual hierarchy
+
+Annotations guide attention and explain why a feature matters. Good annotation is selective: labelling every observation usually creates noise.
+
+```{r labels}
+labeled <- cars |>
+  filter(
+    model %in% c(
+      "Toyota Corolla",
+      "Cadillac Fleetwood",
+      "Ferrari Dino"
+    )
+  )
+
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(alpha = 0.5, size = 2.5) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_text(
+    data = labeled,
+    aes(label = model),
+    nudge_y = 1.5,
+    check_overlap = TRUE
+  ) +
+  labs(
+    title = "Heavier cars tend to have lower fuel economy",
+    subtitle = "Selected observations are labelled for orientation",
+    x = "Weight",
+    y = "Miles per gallon"
+  )
+```
+
+# Misleading graphics and scale choices
+
+Visual design can exaggerate differences even when the underlying numbers are correct.
+
+Bars encode magnitude through length from a baseline; truncating that baseline can therefore distort the perceived ratio of values.
+
+```{r misleading-axis}
+axis_example <- tibble(
+  group = c("A", "B"),
+  value = c(95, 100)
+)
+
+ggplot(axis_example, aes(group, value)) +
+  geom_col() +
+  labs(
+    title = "Bars with a zero baseline",
+    y = "Value"
+  )
+```
+
+When points rather than bars are used, a non-zero axis can be entirely appropriate if the relevant task is comparison of position rather than length.
+
+# Spatial visualisation
+
+Maps are powerful because geographic position already carries meaning. They also introduce distinctive statistical risks:
+
+- raw counts can be misleading when regions differ in population or area;
+- apparent spatial patterns can depend on classification boundaries;
+- choropleths encourage ecological interpretation at the region level;
+- projection affects shape, area and distance.
+
+## US state choropleth
+
+This example uses built-in state population values and polygon data from the optional `maps` package.
+
+```{r choropleth}
+if (has_pkg("maps")) {
+  state_map <- map_data("state")
+
+  state_pop <- as_tibble(state.x77, rownames = "region") |>
+    transmute(
+      region = str_to_lower(region),
+      population = Population
+    )
+
+  state_map2 <- state_map |>
+    left_join(state_pop, by = "region")
+
+  ggplot(
+    state_map2,
+    aes(long, lat, group = group, fill = population)
+  ) +
+    geom_polygon(colour = "white", linewidth = 0.15) +
+    coord_quickmap() +
+    scale_fill_viridis_c() +
+    labs(
+      title = "US state population choropleth",
+      fill = "Population\n(thousands)"
+    ) +
+    theme_void()
+}
+```
+
+# Interactive graphics
+
+Interactivity can support exploration through zooming, tooltips, filtering and linked views. It should reveal information rather than merely add controls.
+
+A useful principle is:
+
+> Interaction should answer a question that the static graphic cannot answer efficiently.
+
+```{r plotly}
+if (has_pkg("plotly")) {
+  p_interactive <- ggplot(
+    mpg,
+    aes(
+      displ,
+      hwy,
+      colour = class,
+      text = paste(
+        "Manufacturer:", manufacturer,
+        "<br>Model:", model,
+        "<br>Highway mpg:", hwy
+      )
+    )
+  ) +
+    geom_point(size = 2.5) +
+    labs(
+      title = "Interactive scatter plot",
+      x = "Engine displacement",
+      y = "Highway mpg"
+    )
+
+  plotly::ggplotly(
+    p_interactive,
+    tooltip = "text"
+  )
+}
+```
+
+# Interactive graphics with Shiny
+
+Shiny adds reactive inputs to the visualization process. The user no longer receives a fixed view: they define part of the statistical query.
+
+A good Shiny app exposes meaningful choices, such as a variable, subgroup, threshold or smoothing parameter. A poor app simply adds many controls because they are available.
+
+```{r shiny-example, eval=FALSE}
+library(shiny)
+
+ui <- fluidPage(
+  titlePanel("Explore diamond prices"),
+  sidebarLayout(
+    sidebarPanel(
+      sliderInput(
+        "binwidth",
+        "Histogram bin width",
+        min = 100,
+        max = 2000,
+        value = 500,
+        step = 100
+      )
+    ),
+    mainPanel(
+      plotOutput("hist")
+    )
+  )
+)
+
+server <- function(input, output, session) {
+  output$hist <- renderPlot({
+    ggplot(diamonds, aes(price)) +
+      geom_histogram(
+        binwidth = input$binwidth
+      )
+  })
+}
+
+shinyApp(ui, server)
+```
+
+# Reproducible graphics
+
+A reproducible graphic records the complete route from data to image. This makes it possible to update, audit and version the visualization.
+
+Avoid workflows in which labels, colours or values are changed manually after export without leaving a record in the analysis code.
+
+## A reusable plotting function
+
+Functions are useful when the same statistical display is needed repeatedly.
+
+```{r plotting-function}
+scatter_with_lm <- function(data, x, y) {
+  ggplot(
+    data,
+    aes(x = {{ x }}, y = {{ y }})
+  ) +
+    geom_point(alpha = 0.6) +
+    geom_smooth(method = "lm", se = FALSE) +
+    labs(
+      x = rlang::as_label(enquo(x)),
+      y = rlang::as_label(enquo(y))
+    )
+}
+
+scatter_with_lm(cars, wt, mpg)
+```
+
+## Saving a figure
+
+`ggsave()` records dimensions and resolution explicitly.
+
+```{r saving, eval=FALSE}
+p <- ggplot(cars, aes(wt, mpg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+
+ggsave(
+  filename = "weight_mpg.png",
+  plot = p,
+  width = 7,
+  height = 5,
+  dpi = 300
+)
+```
+
+# A compact decision guide
+
+| Statistical question | Strong first choice | Useful alternatives |
+|---|---|---|
+| How frequent are categories? | Bar chart | Ordered dot plot, proportional bars |
+| How are two categorical variables related? | Proportional bars | Mosaic plot, heatmap |
+| What is the distribution of one variable? | Histogram | Density, ECDF |
+| How do distributions differ by group? | Boxplot + points | Violin, raincloud, ridgeline |
+| Are two quantitative variables associated? | Scatter plot | Smoother, 2D bins, contours |
+| Is overplotting severe? | Transparency | Hexbin, 2D binning |
+| How does a quantity change over time? | Line chart | Ribbon, step chart |
+| How do ranks change over time? | Bump chart | Slope chart |
+| How do two measurements differ by group? | Dumbbell | Slope chart |
+| How uncertain are estimates? | Interval / forest plot | Ribbon, density-based interval |
+| Are model assumptions plausible? | Residual plot | Q-Q plot |
+| What is the multivariate structure? | PCA / pairs plot | Parallel coordinates, radar |
+| How do units flow between categories? | Alluvial / Sankey | Chord diagram |
+| What is the hierarchy? | Dendrogram | Treemap |
+| What are the dominant network connections? | Network plot | Chord diagram |
+| Where are values geographically concentrated? | Choropleth / point map | Interactive map |
+| Does the audience need drill-down? | Static graphic first | Plotly or Shiny |
+
+# Choosing between simple and spectacular
+
+Some of the most visually impressive charts in this showcase — radar plots, circular bars, alluvial plots and chord diagrams — are **not universally better** than ordinary statistical graphics.
+
+A useful hierarchy is:
+
+1. first identify the statistical comparison;
+2. choose the simplest graphic that represents it faithfully;
+3. add complexity only if it reveals meaningful structure;
+4. use annotation and visual hierarchy to guide interpretation;
+5. check whether a simpler Cartesian alternative communicates the result more accurately.
+
+A chart can be memorable without being informative. The goal of statistical visualization is not maximal visual novelty, but **maximal insight per unit of visual complexity**.
+
+# Suggested showcase exercises
+
+1. Reproduce the same contingency table as grouped bars, proportional bars, a heatmap, a polar stacked bar and an alluvial plot. Discuss which questions each representation makes easier or harder.
+
+2. Take the `iris` dataset and compare species using a boxplot, violin plot, beeswarm plot, raincloud plot and radar plot. Which displays preserve raw observations? Which emphasize summaries?
+
+3. Convert one exploratory plot into an explanatory graphic by changing only title, annotation, ordering, transparency and highlighting.
+
+4. Select one "cool" graphic from the final sections and redesign the same information using a simpler Cartesian chart. Explain what is gained and lost.
+
+5. Find a published graphic that uses a circular, flow or network layout. Identify the quantitative encoding and explain whether the visual complexity is justified.
+
+# Final principle
+
+> **A graphic is a statistical argument expressed visually.**
+
+The best plot is not necessarily the one with the most layers, colours or geometry. It is the one that makes the intended comparison clear, preserves relevant uncertainty and complexity, and helps the reader draw conclusions that the data can actually support.
+
+___________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

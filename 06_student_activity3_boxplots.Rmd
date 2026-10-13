@@ -1,0 +1,345 @@
+---
+title: "Student activity 3: unusual compared with what?"
+subtitle: "Boxplots, regression residuals and influential observations"
+author: "Group members: replace with your names"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = TRUE,
+  fig.width = 8, fig.height = 5, fig.align = "center",
+  dpi = 120, comment = "#>"
+)
+options(width = 90)
+```
+
+# Your task
+
+Prepare a short, reproducible report on a calibration dataset. Your central
+question is:
+
+> **Which observations deserve closer inspection, and how does that judgement
+> change when we consider an explanatory variable?**
+
+Work in groups of 2–4. Before computing each new analysis, discuss what you
+expect to learn. Then compare your prediction with the evidence. Keep a short
+record of conclusions that change as your analysis progresses.
+
+Complete the code chunks and replace the response prompts with your own
+explanations. The import chunk is ready to run; the analysis chunks contain
+comments only, so the initial document can be knitted before you complete it.
+Use either base R graphics or ggplot2, and keep your plotting conventions
+consistent. Base R is sufficient for every required analysis.
+
+**Suggested working time:** 90 minutes, followed by a short group discussion.
+
+# Study context and data
+
+Imagine a laboratory evaluating a sensor. In each calibration run, a reference
+input is set to a known level, `x`, and the sensor produces a reading, `y`.
+The aim is to understand how the readings vary with the input and to identify
+runs that require further investigation.
+
+This is a **simulated teaching dataset**, framed as a fictional calibration
+study. It is not a collection of real laboratory measurements or a random
+sample intended to represent a wider population. The construction details
+will be discussed after your initial analysis.
+
+Each row represents one run. Row order does not represent time. Three runs,
+labelled A, B and C, will be followed throughout the activity; these labels
+do not indicate that a measurement is wrong.
+
+| Variable | Meaning | Type / units |
+|:--|:--|:--|
+| `id` | Unique identifier for the calibration run | Character identifier |
+| `x` | Reference input level | Numeric, arbitrary input units |
+| `y` | Sensor reading | Numeric, arbitrary response units |
+
+## Import the data
+
+Save this Rmd in your working folder and place `boxplots_data.csv` in
+its `data` subfolder. Keep that relative path when you knit your report.
+The CSV uses commas to separate fields and a decimal point for numeric values.
+
+```{r import-data}
+data_path <- file.path("data", "boxplots_data.csv")
+if (!file.exists(data_path)) {
+  stop("Place boxplots_data.csv in the data folder next to this Rmd.")
+}
+
+dat_raw <- read.csv(data_path, stringsAsFactors = FALSE)
+dat <- dat_raw
+case_ids <- c("A", "B", "C")
+
+head(dat)
+str(dat)
+```
+
+Keep `dat_raw` unchanged. Add derived variables to `dat` and create a separate
+copy for the later hypothetical modification. Select observations using `id`,
+not their row numbers.
+
+If needed, install `knitr` and `rmarkdown` once from the R console. RStudio's
+**Knit** button renders the document; Pandoc is bundled with RStudio.
+If you choose ggplot2, install it and load it in your setup chunk.
+
+# Step 1: inspect the data and plan your analysis
+
+1. Determine the number of observations and check the variable types.
+2. Check for missing or non-finite numeric values and duplicated identifiers.
+3. Explain what one row represents and whether there are repeated measurements
+   identified in the supplied data.
+4. Agree on an initial plan: which summaries and plots will you use, and what
+   question will each answer?
+
+Useful functions include `nrow()`, `names()`, `summary()`, `is.na()`,
+`is.finite()` and `anyDuplicated()`.
+
+```{r data-audit}
+# Add your data checks here.
+```
+
+**Your response:** report any data-quality issues and list your planned
+analyses. At this stage, do not discard observations because they look unusual.
+
+# Step 2: examine the response on its own
+
+For this step, base your interpretation on `y` alone. Save your conclusions
+before plotting the relationship with `x`.
+
+1. Summarise the centre, spread and range of `y`.
+2. Draw a boxplot of `y` and overlay all observations. Label A, B and C so that
+   they remain distinguishable. Jitter only the categorical plotting position.
+3. Obtain the lower and upper box edges, calculate the 1.5-IQR fences, and list
+   the identifiers of observations strictly outside them.
+4. Save the resulting logical indicator as `dat$marginal_flag`.
+
+For base R, use the box edges returned by `boxplot.stats()` to match the
+convention used by `boxplot()`. Its `stats` vector contains the lower whisker,
+lower box edge, median, upper box edge and upper whisker, in that order.
+If you use ggplot2, state which quartile convention you use for classification.
+
+The fences are
+
+\[
+L=Q_1-1.5(Q_3-Q_1), \qquad U=Q_3+1.5(Q_3-Q_1).
+\]
+
+```{r marginal-analysis}
+# Calculate descriptive summaries and fences.
+# Create dat$marginal_flag and list flagged IDs.
+# Draw the boxplot with observations and labels.
+```
+
+**Your response:** which of A, B and C are flagged? Explain what this rule
+establishes and what further information would be needed before calling a
+reading a measurement error. Distinguish a fence from a whisker endpoint.
+
+> **Record your initial judgement.** Write one sentence about each of A, B
+> and C using only the evidence from this step. Keep these sentences for
+> comparison with your later conclusions.
+
+# Step 3: add the explanatory variable
+
+1. Plot `y` against `x` and label A, B and C.
+2. Fit the ordinary least-squares model `y ~ x` using **all observations**.
+   Name the fitted model `fit` and report its intercept and slope.
+3. Add the fitted line to the scatterplot. Save its fitted values and residuals
+   as `dat$fitted` and `dat$residual`.
+4. For A, B and C, add vertical segments from the fitted line to the observed
+   responses. Explain what their lengths and directions represent.
+
+Useful functions include `lm()`, `coef()`, `fitted()`, `resid()`, `abline()`,
+`segments()` and `text()`.
+
+```{r model-and-scatterplot}
+# Fit the model to every observation.
+# Add fitted values and residuals to dat.
+# Plot the data, fitted line and labelled residual segments.
+```
+
+**Your response:** revisit your three initial sentences. Which judgements
+change after considering `x`? Identify any observation whose predictor value
+extends beyond the range covered by most other runs. What assumption is
+needed to interpret the fitted line there?
+
+The generating relationship is not supplied at this stage. Base your report
+on the observed data and fitted model, and distinguish an estimated
+relationship from a known scientific law.
+
+# Step 4: compare response flags with residual flags
+
+For observation $i$, the residual is
+
+\[
+e_i=y_i-\widehat y_i,
+\qquad \widehat y_i=\widehat\beta_0+\widehat\beta_1x_i.
+\]
+
+1. Draw a boxplot of the residuals with all observations overlaid.
+2. Apply the same boxplot convention to the residuals and save the indicator
+   as `dat$residual_flag`.
+3. Plot residuals against `x`. Add a horizontal reference at zero and label
+   A, B and C. You may also draw the residual boxplot fences.
+4. Make a table for A, B and C containing `id`, `x`, `y`, fitted value,
+   residual, marginal flag and residual flag.
+5. Check whether any other observations are flagged and report their IDs.
+
+```{r residual-analysis}
+# Calculate residual fences and dat$residual_flag.
+# Create both residual plots and the comparison table.
+```
+
+**Your response:** explain the difference between being unusual among all
+responses and being unusual relative to the fitted relationship. Does a
+residual boxplot reveal everything visible in the residual-versus-predictor
+plot? Discuss any pattern in the centre or spread of the residuals.
+
+Residuals are calculated after fitting the model and are not independent
+copies of its errors. Under the usual constant-variance linear model,
+their variances depend on leverage. Treat this flagging rule as an
+exploratory diagnostic, not a formal test with a universal significance level.
+
+# Step 5: distinguish residual size, leverage and influence
+
+These quantities answer different questions:
+
+| Quantity | Question | Useful R functions |
+|:--|:--|:--|
+| Residual size | How far is the response from the fitted line? | `resid()`, `rstandard()`, `rstudent()` |
+| Leverage | How unusual is the predictor value relative to the others? | `hatvalues()` |
+| Influence | How much does the fitted relationship depend on this observation? | `cooks.distance()`, refitting after omission |
+
+1. Calculate leverage, standardized residuals, externally studentized
+   residuals and Cook's distance for all observations.
+2. Present a compact table for A, B and C. Also identify the observations
+   with the largest leverage, absolute residual and Cook's distance.
+3. Explain whether these rankings agree and what any disagreement tells you.
+
+With an intercept and one predictor,
+
+\[
+h_{ii}=\frac{1}{n}+\frac{(x_i-\bar x)^2}{\sum_j(x_j-\bar x)^2}.
+\]
+
+Cook's distance combines residual size and leverage. Standardized residuals
+adjust for leverage and use the overall estimated error scale. Externally
+studentized residuals estimate that scale with the observation omitted.
+
+```{r diagnostic-comparison}
+# Calculate the diagnostic quantities.
+# Build a labelled table and compare the rankings.
+```
+
+**Your response:** can a high-leverage observation have a small residual?
+Must the largest response be the most influential observation? Support your
+answers with your results. Explain why the diagnostic table does not by
+itself justify deleting observations.
+
+# Step 6: observe influence through case deletion
+
+1. Keep the full-data fit as the reference.
+2. Fit three further models, omitting A, B and C **one at a time**. Each fit
+   must retain the other two cases.
+3. For each fit, report the intercept, slope and their changes from the
+   full-data coefficients. Define changes as omitted-case fit minus full fit.
+4. Calculate the maximum absolute difference in predictions between each
+   reduced fit and the full fit, evaluated at **all original predictor values**.
+
+Use `predict(..., newdata = dat)` to evaluate each reduced model at the same
+locations. Do not compare fitted-value vectors of different lengths.
+
+```{r case-deletion-analysis}
+# Refit after omitting each labelled case separately.
+# Compare coefficients and predictions at the original x values.
+```
+
+**Your response:** which omissions change the slope or predictions most?
+Compare this evidence with Cook's distance. Does any comparison require a
+reduced model to predict outside its remaining predictor range? This is a
+sensitivity analysis; it is not a new cleaned dataset.
+
+# Step 7: change one response while keeping its predictor fixed
+
+Create a copy named `dat_shift`. Increase A's response by **25 units**, keeping
+its predictor and every other observation unchanged. Keep the original `dat`.
+
+**Before computing:** predict whether A's leverage, its residual, its Cook's
+distance and the fitted slope will change. Give a reason for each prediction.
+
+1. Fit the modified dataset and name the model `fit_shift`.
+2. Compare the four quantities between the original and modified scenarios.
+3. Fit the data without A and compare the resulting slope across scenarios.
+4. Draw two scatterplots using the same axis limits. In each, show the fit
+   including A and the fit excluding A. Make both scenarios fully visible.
+
+```{r modified-response-analysis}
+# Copy the data, then modify A's y value only.
+# Refit: previously stored fitted values and residuals are now outdated.
+# Recalculate diagnostics from the modified model.
+# Create the comparison table and the two scatterplots.
+```
+
+**Your response:** compare the results with your predictions. Explain how an
+observation can affect the line against which its own residual is measured.
+Why can ranking observations only by raw residual size be insufficient?
+
+# Report and group discussion
+
+Submit the completed Rmd and its knitted HTML. Your report should contain:
+
+- a short description of the data and any issues found during inspection;
+- a response boxplot, the fitted relationship, and the two residual displays;
+- labelled tables comparing A, B and C, regression diagnostics, case deletion
+  and the modified-A scenario;
+- the two plots comparing fits with and without A;
+- a conclusion of approximately 150–200 words explaining how context changed
+  your interpretation and what you would check before excluding a measurement.
+
+Figures may be combined into panels. Every figure needs informative axis
+labels and a caption explaining its analytical purpose. Every important
+claim should point to a plot, a table or a calculation.
+
+During the group discussion, compare:
+
+1. one initial judgement that changed after introducing `x`;
+2. the evidence you used to distinguish residual size, leverage and influence;
+3. any differences between groups' plotting or quartile conventions;
+4. one limitation of the fitted linear model and one further check you would
+   request from the laboratory.
+
+If you use AI assistance, keep the prompt and describe how you checked the
+returned code and interpretations. You remain responsible for the analysis.
+
+## Optional extensions
+
+- Repeat Step 7 by decreasing A's original response by 25 units. Compare the
+  changes with the upward modification.
+- Simulate a curved relationship, fit a straight line and inspect its
+  residuals. Discuss whether apparent anomalies can arise from an inadequate
+  model for the mean.
+- Revisit the distribution and sample-size simulations in Unit 05. Explain
+  which cautions about boxplot flags also apply when inspecting residuals.
+
+# References
+
+- R documentation: [Box Plot Statistics](https://stat.ethz.ch/R-manual/R-devel/library/grDevices/html/boxplot.stats.html).
+- R documentation: [Fitting Linear Models](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/lm.html).
+- R documentation: [Regression Deletion Diagnostics](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/influence.measures.html).
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from ChatGPT (OpenAI)
+> in drafting explanations, developing examples and generating R code.
+> The author retains responsibility for the final content.

@@ -1,0 +1,358 @@
+---
+title: "EDA — Reaction Time Experiment"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization · Group Activity"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    self_contained: true
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = TRUE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 6
+)
+```
+
+# Your task
+
+Work in groups to prepare a **reproducible exploratory report** on reaction
+times and response accuracy in two experimental conditions. Your report
+should answer a clear question, support its conclusions with appropriate
+plots and descriptive statistics, and explain the limits of the evidence.
+
+The activity has three steps:
+
+1. **Explore and plan:** inspect the dataset, agree on an analysis plan, and
+   identify the main issues that could affect interpretation.
+2. **Prompt and verify:** use an AI assistant to help implement your plan,
+   then run, check, and revise the proposed analysis.
+3. **Discuss and compare:** compare your findings and analytical choices
+   with those of other groups, then complete your report.
+
+> **Plan before prompting.** Write down your group's initial questions and
+> analysis choices before requesting an analysis from an AI assistant.
+> Keep that initial plan so that you can explain what changed and why.
+
+# Study context and data collection
+
+## A visual decision experiment
+
+**The following study scenario is fictional and has been added for this
+teaching activity.** It gives the dataset a concrete interpretation; it is
+not verified documentation of the data file's origin. The participant and
+trial counts below are the design described in the original activity and
+must be checked against the supplied data.
+
+Imagine that a research team recruits 24 volunteers from a university to
+study how task difficulty relates to the speed and accuracy of visual
+decisions. On each trial, a participant sees two panels of dots on a
+computer screen and presses a key to indicate which panel contains more
+dots.
+
+- **Condition A — easy:** the difference between the panels is large.
+- **Condition B — hard:** the difference between the panels is small.
+
+Each participant completes a short practice session, followed by 80
+recorded trials: 40 in each condition. In this fictional protocol, the
+two conditions are randomly interleaved within each participant's session,
+and all participants use the same computer and response keys. Practice
+trials are excluded from the analysis file.
+
+For every recorded trial, the software stores the participant identifier,
+the condition, the elapsed time from stimulus onset to the key press
+in milliseconds, and whether the response was correct. These records are
+exported to `RT_data.csv`.
+
+This is a **within-participant experiment with repeated measurements**:
+every participant completes both conditions. The planned dataset therefore
+contains
+
+\[
+24 \times 2 \times 40 = 1\,920 \text{ trial-level observations}.
+\]
+
+> **A row is a trial, not a participant.** Repeated observations from the
+> same person share that person's characteristics. The planned dataset
+> contains 24 participants, not 1,920 independent participants. Comparisons
+> between A and B should retain the pairing whenever participant-level
+> results are used.
+
+The fictional protocol motivates questions about task difficulty, but it
+does not establish the provenance or actual randomization of the supplied
+CSV. Your report should distinguish the teaching scenario from information
+that can be verified in the data. A convenience sample of volunteers also
+limits generalization to a broader population.
+
+## Variables
+
+The original analysis uses the following columns. Check their types,
+observed values, and coding before using them.
+
+| Variable | Meaning | Role in the analysis |
+|:--|:--|:--|
+| `Subject` | Participant identifier | Categorical identifier that links repeated trials and paired conditions |
+| `Condition` | Task condition: A = easy, B = hard | Within-participant explanatory factor |
+| `RT` | Reaction time, in milliseconds | Quantitative outcome; smaller values indicate faster responses |
+| `Correct` | Response correctness, expected coding: 1 = correct, 0 = incorrect | Binary outcome; its mean gives the proportion correct when this coding is confirmed |
+| `Correct_f` | A labelled version of response correctness | Categorical display variable; check that its labels agree with `Correct` |
+
+Do not assume that row order is trial order. If a trial index, timestamp,
+or block variable is available, inspect its meaning before using it to
+study practice or fatigue. Otherwise, those patterns cannot be assessed
+directly from the documented columns.
+
+# Get started
+
+## Packages and data file
+
+This document uses `tidyverse`, `knitr`, and `kableExtra`. Install any missing
+packages once in the R console. Keep `RT_data.csv` in a folder named `data`
+next to this Rmd file, or edit `data_file` below to match its location.
+The CSV is an external input; this document does not generate replacement
+observations.
+
+```{r libraries}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+```{r read-data}
+data_file <- "data/RT_data.csv"
+
+if (!file.exists(data_file)) {
+  stop(
+    "Data file not found. Put RT_data.csv in the data folder next to ",
+    "this Rmd, or update data_file.",
+    call. = FALSE
+  )
+}
+
+dati <- read_csv(data_file, show_col_types = FALSE)
+
+required_columns <- c("Subject", "Condition", "RT", "Correct", "Correct_f")
+missing_columns <- setdiff(required_columns, names(dati))
+
+if (length(missing_columns) > 0) {
+  stop(
+    "Required columns are missing: ",
+    paste(missing_columns, collapse = ", "),
+    call. = FALSE
+  )
+}
+```
+
+```{r first-look}
+glimpse(dati)
+head(dati)
+```
+
+# Step 1 — Explore the dataset and plan the analysis
+
+Complete this step as a group before requesting AI-generated analyses.
+Each member should contribute to the plan and be able to explain the
+group's decisions.
+
+## Inspect the data
+
+Establish what is actually present in the file:
+
+- Count the rows, distinct participants, and trials per participant and
+  condition. Compare these counts with the planned design. Check whether
+  every participant appears in both conditions.
+- Inspect variable types, condition labels, and correctness coding.
+  Cross-tabulate `Correct` and `Correct_f` to check consistency.
+- Check missing values and inspect the range and distribution of `RT`.
+  Flag non-positive values and investigate unusually short or long times.
+- Consider whether apparently duplicated rows are genuine duplicates.
+  Without a unique trial identifier, two identical recorded values may
+  still correspond to different trials; do not delete them automatically.
+
+Use small exploratory summaries and plots to understand the data. Keep a
+brief record of issues and decisions. Preserve the imported data and use
+new objects for any filtered or transformed versions.
+
+
+Some simple descriptive statistics that can serve as a starting point:
+
+```{r descriptives}
+# -- Overall summary ---------------------------------------
+desc_overall <- dati %>%
+  group_by(Condition, Correct_f) %>%
+  summarise(
+    N         = n(),
+    Mean_RT   = mean(RT)   %>% round(1),
+    Median_RT = median(RT) %>% round(1),
+    SD_RT     = sd(RT)     %>% round(1),
+    .groups   = "drop"
+  )
+
+desc_overall %>%
+  kbl(caption = "Table 1 · RT summary by Condition and Response Correctness",
+      col.names = c("Condition","Response","N",
+                    "Mean RT (ms)","Median RT (ms)","SD RT (ms)")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE) %>%
+  row_spec(which(desc_overall$Correct_f == "Correct"),
+           background = "#f0f7ff")
+
+# -- Accuracy per subject x condition ---------------------
+acc_subj <- dati %>%
+  group_by(Subject, Condition) %>%
+  summarise(Accuracy = mean(Correct), .groups = "drop")
+
+acc_summary <- acc_subj %>%
+  group_by(Condition) %>%
+  summarise(
+    Mean_Acc = mean(Accuracy) %>% round(3),
+    SD_Acc   = sd(Accuracy)   %>% round(3),
+    .groups  = "drop"
+  )
+
+acc_summary %>%
+  kbl(caption = "Table 2 · Accuracy by Condition (subject-level means)",
+      col.names = c("Condition", "Mean Accuracy", "SD")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE)
+```
+
+
+## Define your questions and planned outputs
+
+Choose a main question about the relationship between condition and
+performance. Decide how reaction time and accuracy both contribute to
+your answer. For example, a faster response is not necessarily a better
+response if accuracy also changes.
+
+Complete the following planning table **before Step 2**. Include at least
+one distribution plot, one plot that retains the within-participant
+comparison, and a compact table of descriptive statistics. Additional
+figures should answer a distinct question.
+
+| Question | Observations included and unit of summary | Planned plot or descriptive statistic | Reason for this choice | Main limitation |
+|:--|:--|:--|:--|:--|
+| [Main question] | [All trials, correct trials, participant summaries, etc.] | [Your choice] | [What it reveals] | [What it may hide] |
+| [Supporting question] | [Your choice] | [Your choice] | [Your justification] | [Your concern] |
+| [Supporting question] | [Your choice] | [Your choice] | [Your justification] | [Your concern] |
+
+> **Step 1 output:** your initial analysis plan, a short data-quality record,
+> and a list of decisions that need particular care. Keep this version even
+> if the analysis changes later.
+
+# Step 2 — Prompt the analysis, then verify it
+
+## Turn your plan into a prompt
+
+Use your Step 1 plan to request specific analytical work from an AI
+assistant. Provide the variable definitions, verified coding, study
+structure, and the outputs you want. An assistant needs the relevant data
+to calculate results; a description of the dataset alone is not enough.
+If it cannot access the CSV, request code to run locally and do not accept
+invented numerical findings.
+
+## Run, check, and revise
+
+Execute the proposed code in R and inspect the outputs. A plausible-looking
+chart or fluent explanation is not sufficient evidence that an analysis is
+correct.
+
+- Check that the code implements your planned grouping, filters, and
+  denominators. Verify that paired values belong to the same participant.
+- Recalculate at least one reaction-time summary and one accuracy value
+  directly for a single participant and condition. Compare them with the
+  generated table or plot.
+- Inspect warnings, missing results, and any participants lost during
+  filtering or joining. Keep enough intermediate summaries to explain them.
+- Verify labels, units, scales, legend entries, and the numbers cited in
+  the written interpretation against the actual output.
+- Review suggestions that change your plan. Accept, revise, or reject them
+  with a reason, and use follow-up prompts when a correction is needed.
+
+Keep the main prompt and the important follow-up prompts. Maintain a short
+decision log; it should show what you checked, not merely list AI responses.
+
+| AI suggestion or output | Check performed | Decision and reason | Consequence for the report |
+|:--|:--|:--|:--|
+| [Suggestion or output] | [Your verification] | [Accepted, revised, or rejected; why] | [What changed, if anything] |
+
+> **Step 2 output:** working R code, verified figures and tables, a draft
+> interpretation, and a prompt and decision log. Your group is responsible
+> for every result and statement retained in the report.
+
+# Step 3 — Discuss and compare results
+
+Share your draft findings with another group. Explain your main question,
+one key figure, one descriptive table, and one decision that materially
+affects interpretation.
+
+Compare both the conclusions and the choices behind them:
+
+- Did the groups analyse the same trials and use the same unit of summary?
+- Did reaction time and accuracy support the same description of performance?
+- Were the apparent differences similar across participants, or did
+  participant-level plots reveal important variation?
+- If numerical results differ, can the difference be traced to filters,
+  missing values, denominators, weighting, or the choice of summary?
+- Did a particular graphical choice make a pattern clearer or obscure it?
+- Which AI suggestions needed correction, and how were problems detected?
+
+When results disagree, reproduce at least one disputed calculation using a
+shared definition before interpreting the disagreement. Different analyses
+may answer different questions; explain this when it applies.
+
+Revise your report after the discussion. State one useful point of agreement,
+one difference between the analyses, and one improvement you made. If no
+revision is needed, explain which checks supported retaining your approach.
+
+> **Step 3 output:** a short comparison of the groups' approaches and the
+> final, revised report.
+
+# The report to submit
+
+Submit one **Rmd source file and its knitted HTML report per group**.
+Include the group members' names. Keep the data path reproducible and state
+which supplied data file you used. The report must knit in a fresh R session
+with the CSV and required packages available; it should not depend on objects
+created manually in the Console.
+
+Use the following structure. Replace the activity instructions and
+placeholders with your own analysis and explanations in the submission.
+
+| Section | Required content |
+|:--|:--|
+| Research question and context | Main question, brief study description, and explicit identification of the fictional scenario |
+| Data and analysis decisions | Observed data dimensions and coding, repeated-measures structure, data-quality findings, inclusion rules, denominators, and choice of summaries |
+| Results | At least one distribution plot, one plot retaining the within-participant comparison, and a concise descriptive table; cover both reaction time and accuracy |
+| Interpretation and limitations | Answers supported by actual results, relevant variability, and limits arising from the data and analytical choices |
+| Comparison and revision | What comparison with another group revealed and how the final report changed |
+| Reproducibility and AI appendix | Initial plan, main and relevant follow-up prompts, decision log, reproducible code, and a brief statement of AI assistance |
+
+Every figure and table needs a caption identifying what is summarized, its
+units, and the observations included. Add a short interpretation in your
+own words. Use a small number of purposeful outputs rather than a catalogue
+of charts, and avoid describing a difference as statistically significant
+without an appropriate inferential analysis.
+
+The report will be assessed for the clarity of its questions, suitability of
+its plots and summaries, treatment of repeated measurements and data-quality
+issues, quality of interpretation, reproducibility, and evidence that
+AI-generated work was checked critically.
+
+An AI-assistance statement can follow this template, adapted to the work
+actually performed:
+
+> **AI assistance.** We used [tool/model, if available; date] to assist with
+> [specific tasks]. We checked [specific code, calculations, and
+> interpretations] and revised [main issues]. The group takes responsibility
+> for the submitted analysis and conclusions.

@@ -1,0 +1,74 @@
+---
+title: "Lesson 2026/09/30"
+author: "livio"
+date: "2026-09-30"
+output:
+  html_document:
+    toc: true
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Import
+
+```{r}
+dati <- read.csv("data/students.csv")
+
+str(dati)
+
+```
+
+## summary
+
+```{r}
+summary(dati)
+```
+
+
+## plot
+
+```{r}
+hist(dati$classes_attended)
+boxplot(dati$classes_attended)
+
+
+hist(dati$assignments_submitted)
+boxplot(dati$assignments_submitted)
+
+```
+
+```{r}
+
+table(dati$classes_attended,dati$assignments_submitted)
+
+plot(dati$classes_attended,dati$assignments_submitted)
+
+
+```
+
+```{r}
+library(ggplot2)
+
+ggplot(dati,aes(x=classes_attended,y=assignments_submitted,colour = student_id))+geom_point()
+
+
+dati$student_id=factor(dati$student_id)
+ggplot(dati,aes(x=classes_attended,y=assignments_submitted,colour = student_id))+geom_point()+theme(legend.position = "none")
+
+
+
+ggplot(dati,aes(x=classes_attended,y=assignments_submitted))+
+ geom_smooth(aes(group = 1), method = "lm", se = FALSE,
+              colour = "black") +geom_jitter(
+    width = 0.10,
+    height = 0.10,
+    size = 1.8,
+    alpha = 0.45,
+    colour = "#2C7FB8"
+  ) 
+```
+

@@ -1,0 +1,312 @@
+---
+title: "Reaction Time Experiment — Feedback and Worked Example"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization · Commentary on the Group Activity"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: true
+    code_folding: show
+    self_contained: true
+    fig_caption: true
+---
+
+
+```{r feedback-setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = FALSE)
+```
+
+# How to use this feedback
+
+Compare this commentary with your group's report and the decisions recorded
+in your analysis plan. It describes features of a convincing analysis and
+provides one worked approach. Other approaches can be equally appropriate
+when their questions, summaries, and interpretations are consistent.
+
+This is general feedback on the activity, not an assessment of particular
+submissions. No student reports or observations from `RT_data.csv` were
+available when this document was prepared. The example therefore generates
+its numerical results from the CSV when it is run; no findings are supplied
+in advance.
+
+The planned design has 24 participants, two conditions (A = easy, B = hard),
+and 40 trials per participant per condition. These are design expectations,
+not verified counts. The visual-task scenario accompanying the activity is
+fictional and must be identified as such in a report.
+
+> **The key question for reviewing your work:** do the data selected, the
+> unit of summary, the graph, and the written conclusion all refer to the
+> same question?
+
+# Critical issues to discuss
+
+## Repeated measurements and the unit of analysis
+
+A plot of all trials describes trial-level variability. A plot of
+participant summaries describes variation between participants. Specify
+which level each output represents. If you calculate a within-participant
+difference, define its direction explicitly, for example B minus A, and keep
+each participant's values matched across conditions.
+
+The planned 1,920 rows are not 1,920 independent participants. Pooling trials
+can be useful for describing their distribution, but it conceals pairing
+and can give participants with more eligible trials greater influence.
+A graph connecting each participant's A and B summaries makes that pairing
+visible. A separate graph or table of differences addresses how consistently
+the within-participant change occurs.
+
+For example, let \(m_{ic}\) be participant \(i\)'s median reaction time on
+eligible trials in condition \(c\). Then
+
+\[
+\Delta_i^{RT}=m_{iB}-m_{iA}.
+\]
+
+A positive difference means a longer median reaction time in B. The mean of
+these participant differences is a different summary from the difference
+between the two pooled trial medians. Label the quantity you actually
+calculate. Similarly, the median of paired differences need not equal the
+difference between the two medians of participant summaries.
+
+## Reaction time and correctness
+
+Decide whether the main reaction-time analysis uses all responses, correct
+responses only, or separate summaries for correct and incorrect responses.
+Explain how that choice changes the question. If you analyse reaction time
+on correct trials only, calculate accuracy from the relevant set of all
+trials, not from the correct-only subset. Identify participants with no
+eligible trials rather than silently dropping them.
+
+For participant \(i\) in condition \(c\), the observed-response accuracy is
+
+\[
+\widehat p_{ic}=
+\frac{\text{number of correct responses}_{ic}}
+     {\text{number of responses with observed correctness}_{ic}}.
+\]
+
+Using only correct trials in both numerator and denominator produces 100%
+accuracy by construction. Excluding a reaction time from the RT analysis
+does not automatically justify excluding its observed correctness from the
+accuracy analysis.
+
+A correct-only RT comparison is conditional on success. If the conditions
+have different error rates, the retained trials may represent different
+subsets of performance. Report accuracy alongside reaction time. Slower
+responses accompanied by greater accuracy may be consistent with a
+speed–accuracy trade-off, but those descriptive patterns alone do not
+establish its mechanism.
+
+## Distribution shape and unusual values
+
+Inspect the distribution before choosing measures of centre and spread.
+Consider what the mean and standard deviation reveal compared with the
+median and interquartile range. A boxplot outlier flag alone is not a reason
+to remove an observation. Any exclusion rule needs a justification and the
+number of affected trials and participants. For discretionary exclusions,
+check whether the main description changes when the rule is omitted.
+
+Distinguish impossible or unusable recorded values from unusual but
+potentially valid observations. The worked example excludes missing,
+non-finite, and non-positive RT values from RT summaries. It retains all
+other positive finite RTs, including extreme values, because no verified
+timing protocol is available to justify an additional cutoff. This choice
+is transparent, not a claim that every retained value is plausible.
+
+## Missingness, denominators, and weighting
+
+Report how many observations contribute to each result. Distinguish a
+pooled trial proportion from the mean of participant-specific proportions:
+the pooled calculation weights participants equally only when their
+denominators are equal. The two estimates can also happen to coincide with
+unequal denominators, but their weighting is still different.
+
+Exclusions can make an initially balanced design unbalanced. If correctness
+is missing, state whether the denominator includes only trials with observed
+correctness and report how many values are missing. This denominator rule
+does not remove possible bias from missingness.
+
+Report the number of complete participant pairs separately for each outcome.
+A participant may contribute to the paired accuracy comparison but lack
+eligible RTs in one condition. Also distinguish an absent participant–condition
+combination from a combination containing trials but no usable outcome.
+
+## Visual choices
+
+Use common axes when comparing groups, show units and sample sizes where
+useful, and distinguish trial-level from participant-level variability.
+Explain choices such as histogram bin width, density bandwidth, or a
+transformed axis when they affect interpretation. Make condition labels
+readable and avoid relying on colour alone.
+
+A bar chart of mean RTs hides the shape of the distribution and the
+within-participant pairing. Histograms, empirical distribution functions,
+or boxplots with observations address distributional questions; connected
+participant summaries address paired comparisons. Neither graph replaces
+the other.
+
+If error bars are included, define whether they show a standard deviation,
+standard error, or interval estimate, and explain the unit on which they
+are calculated. Trial-level variability and uncertainty about a
+participant-level average are different quantities. The worked example
+uses descriptive plots without inferential error bars.
+
+## Scope of the conclusions
+
+Separate an observed difference from a claim about why it occurs. Do not
+infer causation or actual randomization from the CSV or from the fictional
+scenario. This activity focuses on exploration and description; formal
+hypothesis tests and model fitting are not required.
+
+A smaller descriptive mean is not automatically a statistically significant
+difference. Conversely, avoiding a significance test does not prevent you
+from describing the magnitude, direction, and variability of an observed
+paired difference. Do not interpret failure to see a clear pattern as proof
+that the conditions are equivalent.
+
+# Further advice for a stronger report
+
+## Make the chain from question to conclusion visible
+
+A useful sequence is **question → observations included → summary → graph
+or table → interpretation → limitation**. A reader should be able to follow
+that sequence without inspecting every line of code.
+
+| Issue to look for in your report | A useful revision |
+|:--|:--|
+| “B is slower” with no definition | State which RT summary is compared, on which trials, and whether the comparison is paired. |
+| Only a group average is reported | Add a distributional view and participant-level variation. |
+| Accuracy changes after filtering out slow RTs | Explain the accuracy population and justify any RT-based restriction; do not inherit it accidentally. |
+| Every unusual value is removed | Separate invalid measurements from unusual observations and justify any discretionary rule. |
+| Counts differ between figures | Identify the filters, missingness, and contributing participants for each figure. |
+| An AI explanation mentions results absent from the output | Check each claim against a computed value or visible feature and remove unsupported claims. |
+| Two groups disagree | First align their units, trial subsets, denominators, and summaries; then recompute the disputed quantity. |
+
+Keep numerical precision sensible and round only for display. An accuracy
+difference of 0.05 is **5 percentage points**; it is not necessarily a 5%
+relative increase. If you use a logarithmic axis, distinguish changing the
+display scale from analysing log-transformed times.
+
+## Verify the AI-assisted work
+
+A strong prompt helps, but it does not validate its response. Recalculate
+at least one participant's RT summary and accuracy directly, inspect the
+participants lost from paired comparisons, and check warnings and missing
+outputs. Inspect the CSV's coding rather than assuming that a plausible
+variable name establishes its meaning.
+
+Keep the original prompt and relevant revisions. Record what was accepted,
+changed, or rejected and why. A reproducible report should run in a fresh R
+session and explain the origin of the data and the role of AI assistance.
+
+# A worked example of prompting
+
+The prompt below makes concrete analytical choices rather than asking
+generically to “analyse the data”. It specifies the question, repeated
+measurements, outcome definitions, validation, plots, and desired output.
+Its choices form one reasonable plan, not a compulsory solution.
+
+```text
+Create one complete R Markdown report, in English, for a bachelor-level
+Data Visualization activity. Return its full .Rmd source, including YAML,
+explanations, and executable R chunks. Use tidyverse and knitr.
+
+The input is data/RT_data.csv. I am not supplying its observations in this
+prompt, so do not invent findings or silently simulate replacement data.
+Generate numerical results from the file when the report is knitted.
+
+Planned design: 24 participants, each completing 40 trials in A (easy)
+and 40 in B (hard). Every row is a trial; measurements repeat within
+Subject and the conditions are paired within participants. The associated
+visual decision task is a fictional teaching scenario, not verified
+documentation of the CSV's provenance. Verify actual counts in the file.
+
+Columns: Subject = participant ID; Condition = A/B; RT = milliseconds;
+Correct = numeric 0/1 (incorrect/correct); Correct_f = text labels.
+Preserve the imported data. Check required columns, parsing problems,
+identifiers, condition labels, and the 0/1 coding. Show a cross-tabulation
+of Correct and Correct_f for manual checking. Stop on invalid identifiers
+or coding rather than guessing repairs. Do not remove repeated rows merely
+because their recorded values are identical.
+
+Question: how do reaction time and accuracy differ between conditions,
+and how consistent are the differences across participants?
+
+Use the following analysis plan:
+1. Audit the observed design and missingness. Display a participant-by-
+   condition table with trial counts and outcome-specific denominators,
+   including combinations absent from the file. Compare with the planned
+   design without assuming the planned counts are observed.
+2. Define eligible RTs as positive finite times on correct trials. Report
+   missing, non-finite, and non-positive RTs separately. Keep other extreme
+   values; no protocol-based cutoff is known. Calculate accuracy from all
+   trials with observed correctness, independently of RT eligibility.
+3. Report pooled correct-trial RT mean, median, SD, and IQR by condition,
+   with contributing counts. Also report equally weighted participant
+   accuracies and pooled trial accuracy, clearly distinguishing them.
+4. Plot eligible trial RT distributions using faceted histograms with a
+   shared 50-ms bin width and common axes. Show density on the y-axis.
+   Note that the bin width is a display choice that can be varied.
+5. Calculate each participant's median eligible RT and accuracy. Join by
+   Subject to retain pairing. Make separate connected-point plots for RT
+   and accuracy, using only complete pairs for the relevant outcome.
+   Report complete and excluded pair counts. Use readable units, condition
+   labels, and colour plus shape; do not add inferential error bars.
+6. Summarise B-minus-A differences: milliseconds for participant RT medians
+   and percentage points for accuracy. Describe the quantity averaged.
+7. Compare the correct-only RT result with an all-response RT description
+   using the same paired participants and the same valid-time rule. Explain
+   that this changes the response subset, not merely the plotting method.
+8. Verify one participant-condition RT median and accuracy directly from
+   the imported data, using a separate base-R calculation. Handle missing
+   outcomes, absent conditions, and no complete pairs explicitly.
+
+Explain each output and its limitations. Keep calculated numerical
+statements tied to R objects. Avoid causal claims, formal tests, and
+unsupported declarations of a speed-accuracy trade-off. End with concise
+guidance for interpreting the results and a transparent AI-assistance note.
+```
+
+The prompt is specific about the analysis while remaining honest about what
+has not been verified. It also requests checks that can reveal problems in
+the response. A focused follow-up prompt, if a check fails, would be:
+
+> The participant–condition audit shows [the discrepancy]. Your calculation
+> uses [the current denominator or grouping], whereas our plan specifies
+> [the intended definition]. Explain the difference, correct the relevant
+> code, and identify which figures, tables, and statements must be updated.
+
+# Example AI response — Complete Rmd source
+
+See files:   
+
+- [04_student_activity2_reaction_time_REPORT.html](04_student_activity2_reaction_time_REPORT.html)  
+- [04_student_activity2_reaction_time_REPORT.Rmd](04_student_activity2_reaction_time_REPORT.Rmd)
+
+
+# Review the worked response
+
+Before adopting this example, check that its coding assumptions match your
+file and that its analytical choices match your question. In particular,
+inspect the accuracy denominators, the participant sets retained for each
+paired comparison, and the decision to condition the primary RT outcome
+on correctness. A successful run is necessary, but it is not sufficient
+validation of the report.
+
+If your group's approach differs, explain what it estimates and compare
+results using a shared definition before deciding which approach is more
+useful. The value of the exercise lies in connecting statistical reasoning,
+visualization, reproducible computation, and critical evaluation of AI
+assistance.
+
+> **Note on AI assistance**
+>
+> This feedback document and its worked Rmd example were prepared with
+> assistance from ChatGPT (OpenAI). They provide general methodological
+> commentary, not feedback derived from individual student submissions.
+
+<!-- The verbatim engine displays nested Rmd without evaluating it.
+Documentation: https://bookdown.org/yihui/rmarkdown-cookbook/verbatim-code-chunks.html
+-->

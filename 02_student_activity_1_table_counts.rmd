@@ -1,0 +1,542 @@
+---
+title: 'Student Activity 1: Tables and Counts data'
+author: "Livio Finos, University of Padova"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    theme: cosmo
+    code_folding: hide
+subtitle: A Course on Data Visualization
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+required <- c("ggplot2", "scales", "patchwork", "knitr")
+missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing)) stop("Install these packages: ", paste(missing, collapse = ", "))
+library(ggplot2)
+library(patchwork)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
+                     fig.width = 8, fig.height = 5, fig.align = "center", dpi = 120)
+theme_set(theme_minimal(base_size = 12))
+cvd_colours <- c("Detected" = "#0072B2", "Not detected" = "#D9D9D9")
+```
+
+# A two-by-two table
+
+<!-- **Learning goal:** distinguish counts, proportions conditional on sex, and proportions conditional on colour-vision status. Before choosing a graph, identify its question and denominator. -->
+
+## Source and variable definitions
+
+(Slightly modified for didactic purposes) 
+Ngente et al. (2021), *Prevalence of Color Vision Anomalies among Dental Professionals*, report a cross-sectional study of 198 dental professionals, including students and faculty. Colour vision was assessed using Ishihara plates. Table 2 reports 5 affected participants among 54 males and 4 among 288 females.
+
+[Read the article and Table 2](https://pmc.ncbi.nlm.nih.gov/articles/PMC8763101/).
+
+We call the outcome **colour-vision deficiency (CVD) detected / not detected**, retaining the study's binary classification. “Not detected” refers to this assessment, not the absence of every possible visual condition. We use **sex (as recorded)** for the reported Male/Female categories; the source labels this variable “gender” and does not establish how sex and gender identity were distinguished. These are sample frequencies, not universal prevalence values.
+
+The original treatment example is replaced by these observed counts. No individual-level records are generated or implied.
+
+```{r observed-table}
+tab <- matrix(c(5, 49,
+                4, 284), nrow = 2, byrow = TRUE)
+dimnames(tab) <- list(
+  Sex = c("Male", "Female"),
+  CVD = c("Detected", "Not detected")
+)
+# Complements: 54 - 5 = 49 and 288 - 4 = 284.
+knitr::kable(addmargins(tab), caption = "Observed counts with marginal totals.")
+stopifnot(sum(tab) == 342, all(rowSums(tab) == c(54, 288)),
+          all(colSums(tab) == c(9, 333)))
+```
+
+**Before plotting:** which sex contributes more participants? Which contributes more detected cases? Are those two questions equivalent to comparing the proportion with detected CVD?
+
+```{r plotting-data}
+dat <- as.data.frame(as.table(tab))
+dat$Sex <- factor(dat$Sex, levels = rownames(tab))
+dat$CVD <- factor(dat$CVD, levels = colnames(tab))
+dat$sex_total <- as.numeric(rowSums(tab)[as.character(dat$Sex)])
+dat$status_total <- as.numeric(colSums(tab)[as.character(dat$CVD)])
+dat$p_within_sex <- dat$Freq / dat$sex_total
+dat$p_within_status <- dat$Freq / dat$status_total
+sex_axis <- setNames(paste0(rownames(tab), "\n(n = ", rowSums(tab), ")"), rownames(tab))
+status_axis <- setNames(paste0(colnames(tab), "\n(n = ", colSums(tab), ")"), colnames(tab))
+```
+
+## Absolute frequencies: how many participants?
+
+**Question:** how many participants in each sex category had CVD detected or not detected?
+
+```{r counts, fig.cap="Stacked counts show both sample sizes and outcome counts. The detected segment starts at zero."}
+p_counts <- ggplot(dat, aes(Sex, Freq, fill = CVD)) +
+  geom_col(position = position_stack(reverse = TRUE), width = .65, colour = "white") +
+  scale_fill_manual(values = cvd_colours) +
+  scale_x_discrete(labels = sex_axis) +
+  scale_y_continuous(expand = expansion(mult = c(0, .05))) +
+  labs(title = "Colour-vision status by sex",
+       subtitle = "Counts: the two sex groups have different sample sizes",
+       x = "Sex (as recorded)", y = "Number of participants", fill = "CVD") +
+  theme(legend.position = "bottom")
+p_counts
+```
+
+The sample contains many more females than males. The blue segments nevertheless represent more detected cases among males: five versus two. Counts correctly answer a question about **numbers of cases**. They do not directly answer a question about the fraction affected within each group.
+
+### Compare the four counts with equal-width bars
+
+```{r dodged-counts}
+ggplot(dat, aes(Sex, Freq, fill = CVD)) +
+  geom_col(position = position_dodge(width = .8, preserve = "single"), width = .7) +
+  geom_text(aes(label = Freq), position = position_dodge(width = .8), vjust = -.4) +
+  scale_fill_manual(values = cvd_colours) +
+  scale_x_discrete(labels = sex_axis) +
+  scale_y_continuous(expand = expansion(mult = c(0, .12))) +
+  labs(title = "Counts on a common baseline", x = "Sex (as recorded)",
+       y = "Number of participants", fill = "CVD") +
+  theme(legend.position = "bottom")
+```
+
+The side-by-side bars make each outcome count directly comparable. Their baseline remains zero, and the labels make the small counts visible.
+
+## Conditional proportions: colour-vision status given sex
+
+**Question:** within each sex group, what proportion had CVD detected?
+
+For a sex category $s$, the empirical conditional proportion is
+
+\[
+\widehat P(\mathrm{CVD}=\mathrm{Detected}\mid\mathrm{Sex}=s)
+=\frac{n_{s,\mathrm{Detected}}}{n_{s,+}}.
+\]
+
+Here the denominator is a **row total**, since rows correspond to sex.
+
+```{r row-proportions}
+within_sex <- prop.table(tab, margin = 1)
+knitr::kable(100 * within_sex, digits = 2,
+             caption = "Percentages within sex: each row sums to 100%.")
+stopifnot(all(abs(rowSums(within_sex) - 1) < 1e-12))
+```
+
+### Bars normalised to 100%
+
+```{r within-sex-bars, fig.cap="Each bar now has its own denominator: 54 males or 144 females. The blue segments share the zero baseline."}
+p_within_sex <- ggplot(dat, aes(Sex, Freq, fill = CVD)) +
+  geom_col(position = position_fill(reverse = TRUE), width = .65, colour = "white") +
+  scale_fill_manual(values = cvd_colours) +
+  scale_x_discrete(labels = sex_axis) +
+  scale_y_continuous(labels = scales::label_percent(),
+                     expand = expansion(mult = c(0, .02))) +
+  labs(title = "Colour-vision status within each sex",
+       subtitle = "Each bar represents 100% of its sex group",
+       x = "Sex (as recorded)", y = "Proportion within sex", fill = "CVD") +
+  theme(legend.position = "bottom")
+p_within_sex
+```
+
+The detected proportions are **5/54 = 9.26% among males** and **4/288 = 1.39% among females**. Normalisation removes the difference in total bar heights; the labels retain the sample sizes.
+
+### Show only the proportion of interest
+
+Because CVD is uncommon in this sample, the blue segments occupy a small part of the 100% bars. If the question concerns only detected CVD, show that proportion directly.
+
+```{r detected-proportions, fig.cap="The axis starts at zero and focuses on detected CVD. Labels include both numerator and denominator."}
+detected <- subset(dat, CVD == "Detected")
+detected$label <- sprintf("%d/%d = %.2f%%", detected$Freq,
+                          detected$sex_total, 100 * detected$p_within_sex)
+p_detected <- ggplot(detected, aes(Sex, p_within_sex)) +
+  geom_col(fill = cvd_colours["Detected"], width = .55) +
+  geom_text(aes(label = label), vjust = -.6) +
+  scale_y_continuous(labels = scales::label_percent(accuracy = 1),
+                     limits = c(0, .12), expand = expansion(mult = c(0, 0))) +
+  labs(title = "Detected CVD as a proportion of each sex group",
+       x = "Sex (as recorded)", y = "Proportion with CVD detected") +
+  theme(panel.grid.major.x = element_blank())
+p_detected
+```
+
+This graph preserves the same two conditional proportions while making their comparison easier. It is a descriptive display, not a demonstration of statistical precision. There are only seven detected cases; population inference would require attention to sampling and uncertainty.
+
+## Reverse the conditioning: sex given colour-vision status
+
+**A different question:** among participants with CVD detected, what proportion were male or female?
+
+Now the denominator is **seven detected cases**, not all males or all females:
+
+\[
+\widehat P(\mathrm{Male}\mid\mathrm{Detected})=\frac59=55.56\%,
+\qquad
+\widehat P(\mathrm{Detected}\mid\mathrm{Male})=\frac5{54}=9.26\%.
+\]
+
+The numerator is the same cell of the table. The denominator and interpretation are different.
+
+```{r column-proportions}
+within_status <- prop.table(tab, margin = 2)
+knitr::kable(100 * within_status, digits = 2,
+             caption = "Percentages within colour-vision status: each column sums to 100%.")
+stopifnot(all(abs(colSums(within_status) - 1) < 1e-12))
+```
+
+```{r reverse-conditioning, fig.cap="The denominator is now the number of participants in each colour-vision status category."}
+sex_colours <- c("Male" = "#4D4D4D", "Female" = "#BDBDBD")
+p_reverse <- ggplot(dat, aes(CVD, p_within_status, fill = Sex)) +
+  geom_col(position = position_stack(reverse = TRUE), width = .65, colour = "white") +
+  geom_text(aes(label = sprintf("%s\n%.1f%%", Sex, 100 * p_within_status), colour = Sex),
+            position = position_stack(vjust = .5, reverse = TRUE), show.legend = FALSE) +
+  scale_colour_manual(values = c(Male = "white", Female = "black"), guide = "none") +
+  scale_fill_manual(values = sex_colours) +
+  scale_x_discrete(labels = status_axis) +
+  scale_y_continuous(labels = scales::label_percent(),
+                     expand = expansion(mult = c(0, .02))) +
+  labs(title = "Sex composition within each colour-vision status",
+       subtitle = "Each bar represents 100% of its status group",
+       x = "CVD status", y = "Proportion within status", fill = "Sex (as recorded)") +
+  theme(legend.position = "bottom")
+p_reverse
+```
+
+The detected group is 71.43% male and 28.57% female; the not-detected group is 25.65% male and 74.35% female. These describe **group composition**. They are not sex-specific CVD proportions. Composition also depends on the sex distribution in the sample.
+
+## Compare the questions side by side
+
+```{r counts-versus-proportions, fig.width=11, fig.height=4.5, fig.cap="The same table supports counts and conditional proportions, but these answer different questions."}
+(p_counts + labs(title = "How many?", subtitle = NULL)) +
+  (p_within_sex + labs(title = "What fraction within each sex?", subtitle = NULL)) +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+```
+
+| Quantity | Calculation | Question |
+|:--|:--|:--|
+| Detected males | $5$ | How many males had CVD detected? |
+| Detected fraction among males | $5/54$ | Among males, what fraction had CVD detected? |
+| Male fraction among detected cases | $5/7$ | Among detected cases, what fraction were male? |
+| Joint sample proportion | $5/198$ | What fraction of all participants were male and had CVD detected? |
+
+**The appropriate graph depends on the question. Counts show numbers; conditional proportions compare distributions within explicitly defined groups. Changing the conditioning variable changes the denominator.**
+
+## Optional: a mosaic plot
+
+A mosaic plot can encode group size and conditional distribution together. In the plot below, column widths represent the sex-group proportions; segment heights represent the CVD proportions within each sex. Rectangle areas therefore represent joint sample proportions.
+
+```{r mosaic, fig.cap="Mosaic plot: widths encode sex-group sizes; heights encode status proportions within sex; areas encode joint proportions."}
+mosaicplot(tab, color = unname(cvd_colours[colnames(tab)]),
+           main = "Sex and colour-vision status",
+           xlab = "Sex (as recorded)", ylab = "CVD status", las = 1)
+```
+
+The narrower male column reflects its smaller sample size. The small detected group makes some rectangles thin; the table and direct labels in earlier plots remain useful for exact reading. A mosaic plot provides more information at once but requires more explanation than aligned bars.
+
+<!-- # Classroom activity -->
+
+<!-- Before showing the completed graphs, give students the count table and ask: -->
+
+<!-- > Visualise this table to compare colour-vision status between the two sex groups. What question does your graph answer? State its denominator. Does it show counts, joint proportions, or conditional proportions? -->
+
+<!-- Then ask students to produce a second graph answering the reverse question: the sex composition of each colour-vision status group. -->
+
+<!-- Discuss: -->
+
+<!-- 1. Why are the two 100% bar charts both valid, even though they show different percentages? -->
+<!-- 2. What is wrong with interpreting “71.43% of detected cases are male” as “71.43% of males have CVD”? -->
+<!-- 3. Why should sample sizes remain available after normalisation? -->
+<!-- 4. Which plot best communicates the difference in detected proportions within sex? -->
+<!-- 5. Why would red and green be a poor choice for the two status categories in this lesson? -->
+
+<!-- **Expected insight:** the conditioning variable identifies the population being treated as 100%. Write the denominator before choosing the chart. -->
+
+## Reference and reproducibility
+
+Ngente, Z., Jadav, B., Aafaque, S., Patil, A., Govindarajulu, R., Muthusamy, P., et al. (2021). *Prevalence of Color Vision Anomalies among Dental Professionals*. **Middle East African Journal of Ophthalmology**, 28, 169–173. Data: Table 2. [Full text](https://pmc.ncbi.nlm.nih.gov/articles/PMC8763101/).
+
+To render, install `rmarkdown`, `knitr`, `ggplot2`, `scales`, and `patchwork`, then run:
+
+```{r render, eval=FALSE}
+rmarkdown::render("conditional_barplots_colour_vision.Rmd")
+```
+
+The count arithmetic and document structure were checked during preparation. The R chunks were not executed in the preparation environment because R was unavailable.
+
+
+# Relationship between two count variables
+
+Suppose we observe, for 443 students:
+
+- `classes_attended`: number of classes attended, from 0 to 10;
+- `assignments_submitted`: number of assignments submitted, from 0 to
+  12. 
+
+```{r}
+library(tidyverse)
+
+set.seed(123)
+
+students <- tibble(
+  student_id = 1:300,
+  classes_attended = rbinom(300, size = 10, prob = 0.65)
+) |>
+  mutate(
+    p_submit = plogis(-1.5 + 0.30 * classes_attended),
+    assignments_submitted = rbinom(300, size = 12, prob = p_submit)
+  )
+
+students$p_submit=NULL
+eg=expand.grid(0:10,0:12)
+colnames(eg)=colnames(students)[-1]
+eg=data.frame(student_id=nrow(students)+1:nrow(eg),eg)
+students=rbind(students,eg)
+
+write.csv(file="./data/students.csv",students)
+
+```
+
+### Why an ordinary scatter plot is inadequate
+
+Both variables are discrete. Consequently, many students have exactly
+the same pair of values.
+
+```{r}
+ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_point() +
+  labs(
+    title = "Classes attended and assignments submitted",
+    x = "Number of classes attended",
+    y = "Number of assignments submitted"
+  ) +
+  theme_minimal()
+```
+
+Several observations are drawn in precisely the same position. The graph
+therefore hides the frequency of the different combinations: a point may
+represent one student or many students.
+
+## Proposal 1: count plot
+
+A count plot represents each observed combination with a circle whose
+area is proportional to its frequency.
+
+```{r}
+ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_count(colour = "#2C7FB8", alpha = 0.75) +
+  scale_size_area(max_size = 12) +
+  scale_x_continuous(breaks = 0:10) +
+  scale_y_continuous(breaks = 0:12) +
+  labs(
+    title = "Attendance and assignment submission",
+    subtitle = "Circle area represents the number of students",
+    x = "Number of classes attended",
+    y = "Number of assignments submitted",
+    size = "Students"
+  ) +
+  theme_minimal()
+```
+
+This graph preserves the observed integer values while making repeated
+combinations visible.
+
+## Proposal 2: joint-frequency heatmap
+
+An alternative is to count the observations in each cell and represent
+frequency using colour.
+
+```{r}
+joint_counts <- students |>
+  count(classes_attended, assignments_submitted)
+
+ggplot(
+  joint_counts,
+  aes(
+    x = classes_attended,
+    y = assignments_submitted,
+    fill = n
+  )
+) +
+  geom_tile(colour = "white") +
+  scale_x_continuous(breaks = 0:10) +
+  scale_y_continuous(breaks = 0:12) +
+  scale_fill_viridis_c(option = "C") +
+  coord_equal() +
+  labs(
+    title = "Joint distribution of attendance and submissions",
+    subtitle = "Darker cells contain more students",
+    x = "Number of classes attended",
+    y = "Number of assignments submitted",
+    fill = "Students"
+  ) +
+  theme_minimal()
+```
+
+The heatmap is particularly effective when there are many repeated
+combinations.
+
+## Proposal 3 Count plot with jitter
+
+### Scatter plot with a small amount of jitter
+
+Jittering adds a small random displacement to overlapping points. The
+displacement makes individual observations more visible while preserving
+the discrete structure of the data.
+
+```{r}
+set.seed(123)
+
+ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_jitter(
+    width = 0.10,
+    height = 0.10,
+    size = 1.8,
+    alpha = 0.45,
+    colour = "#2C7FB8"
+  ) +
+  scale_x_continuous(breaks = 0:10) +
+  scale_y_continuous(breaks = 0:12) +
+  labs(
+    title = "Scatter plot with moderate jittering",
+    subtitle = "Small displacements reveal overlapping observations",
+    x = "Number of classes attended",
+    y = "Number of assignments submitted"
+  ) +
+  theme_minimal()
+```
+
+The original values are integers. The small horizontal and vertical
+displacements are graphical devices only: they do not represent
+measurement error or additional variation in the data.
+
+### Scatter plot with excessive jitter
+
+```{r}
+set.seed(123)
+
+ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_jitter(
+    width = 0.70,
+    height = 0.70,
+    size = 1.8,
+    alpha = 0.45,
+    colour = "#D95F0E"
+  ) +
+  scale_x_continuous(breaks = 0:10) +
+  scale_y_continuous(breaks = 0:12) +
+  labs(
+    title = "Scatter plot with excessive jittering",
+    subtitle = "Large displacements obscure the discrete structure",
+    x = "Number of classes attended",
+    y = "Number of assignments submitted"
+  ) +
+  theme_minimal()
+```
+
+Here the displacement is large relative to the distance between
+consecutive integer values. It creates the misleading impression that
+fractional counts were observed and makes neighbouring combinations
+difficult to distinguish.
+
+## Side-by-side comparison
+
+```{r}
+library(patchwork)
+
+p_count <- ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_count(colour = "#2C7FB8", alpha = 0.75) +
+  scale_size_area(max_size = 10) +
+  labs(
+    title = "Count plot",
+    size = "Students"
+  ) +
+  theme_minimal()
+
+set.seed(123)
+
+p_small <- ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_jitter(
+    width = 0.10,
+    height = 0.10,
+    alpha = 0.45,
+    colour = "#2C7FB8"
+  ) +
+  labs(title = "Moderate jitter") +
+  theme_minimal()
+
+set.seed(123)
+
+p_large <- ggplot(
+  students,
+  aes(x = classes_attended, y = assignments_submitted)
+) +
+  geom_jitter(
+    width = 0.70,
+    height = 0.70,
+    alpha = 0.45,
+    colour = "#D95F0E"
+  ) +
+  labs(title = "Excessive jitter") +
+  theme_minimal()
+
+p_count + p_small + p_large +
+  plot_annotation(
+    title = "Three representations of two count variables"
+  )
+```
+
+A useful question for the students is:
+
+> At what point does jittering stop revealing overlap and start
+> concealing the structure of the original data?
+
+The key principle is that jitter should be small relative to the
+distance between possible values.
+
+## Suggested classroom question
+
+> Both variables are counts. Why does the ordinary scatter plot provide
+> an incomplete representation of their relationship? Which graphical
+> element should represent the number of observations sharing the same
+> pair of values?
+
+### Take-home message
+
+> When two variables are discrete, observations often overlap. A count
+> plot or joint-frequency heatmap displays both the relationship between
+> the variables and the frequency of each observed combination.
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+
+______________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

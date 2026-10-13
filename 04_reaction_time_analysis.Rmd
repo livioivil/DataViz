@@ -1,0 +1,1794 @@
+---
+title: "Reaction Time and Accuracy — Revised Analysis"
+author: "Livio Finos, University of Padova"
+subtitle: An exploratory report with paired participant summaries
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+---
+
+# 0 · The Dataset
+
+- 24 subjects (repeated measures)  
+- Factor: Condition (A = easy / B = hard), 2 levels, within-subject  
+- 40 trials per subject per condition  
+
+1 920 total rows
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width  = 9,
+  fig.height = 6
+)
+```
+
+# 1 · Libraries & Reproducible Seed
+
+```{r libraries}
+library(tidyverse)   # data wrangling + ggplot2
+library(patchwork)   # combine plots
+library(scales)      # axis formatting
+library(ggdist)      # raincloud / halfeye
+library(lme4)        # mixed models (quick check)
+library(knitr)       # tables
+library(kableExtra)  # styled tables
+
+set.seed(2024)
+```
+
+---
+
+# 2 · Data Simulation
+
+```{r simulate}
+# ── Design ────────────────────────────────────────────────
+# 24 subjects (repeated measures)
+# Factor: Condition (A = easy / B = hard), 2 levels, within-subject
+# 40 trials per subject per condition  →  1 920 total rows
+#
+# Ground truth (population level):
+#   Condition A (easy): higher accuracy, faster correct RT
+#   Condition B (hard): lower accuracy, slower correct RT
+#   Incorrect trials are on average SLOWER than correct ones
+#   (post-error slowing + response uncertainty)
+# ──────────────────────────────────────────────────────────
+
+n_subj      <- 24
+n_trials    <- 40          # per subject per condition
+conditions  <- c("A (Easy)", "B (Hard)")
+
+# Subject-level random effects
+subj_df <- tibble(
+  Subject     = paste0("S", str_pad(1:n_subj, 2, pad = "0")),
+  re_intercept = rnorm(n_subj, 0, 40),   # random shift in RT (ms)
+  re_accuracy  = rnorm(n_subj, 0, 0.05)  # random shift in accuracy
+)
+
+# Trial-level data
+sim_data <- expand_grid(
+  Subject   = subj_df$Subject,
+  Condition = conditions,
+  Trial     = 1:n_trials
+) %>%
+  left_join(subj_df, by = "Subject") %>%
+  mutate(
+    # ── Accuracy ──────────────────────────────────────────
+    # Condition A: p(correct) ~ 0.88 | Condition B: ~ 0.68
+    p_correct = case_when(
+      Condition == "A (Easy)" ~ plogis( 2.00 + re_accuracy),
+      Condition == "B (Hard)" ~ plogis( 0.75 + re_accuracy)
+    ),
+    Correct = rbinom(n(), 1, p_correct),
+
+    # ── Reaction Time (ms) ────────────────────────────────
+    # Base RT: A = 480 ms, B = 560 ms
+    # Incorrect trials are ~60 ms slower on average
+    # Log-normal noise for realistic right-skewed RT
+    mu_rt = case_when(
+      Condition == "A (Easy)" & Correct == 1 ~ 480,
+      Condition == "A (Easy)" & Correct == 0 ~ 540,
+      Condition == "B (Hard)" & Correct == 1 ~ 560,
+      Condition == "B (Hard)" & Correct == 0 ~ 625
+    ),
+    RT = rlnorm(n(),
+                meanlog = log(mu_rt + re_intercept) - 0.5 * 0.18^2,
+                sdlog   = 0.18)
+  ) %>%
+  mutate(
+    Correct_f = factor(Correct,
+                       levels = c(1, 0),
+                       labels = c("Correct", "Incorrect")),
+    Condition = factor(Condition, levels = conditions)
+  ) %>%
+  select(Subject, Condition, Trial, Correct, Correct_f, RT)
+
+glimpse(sim_data)
+
+write_csv(file="RT_data.csv",sim_data)
+```
+
+---
+
+# 3 · Descriptive Statistics
+
+```{r descriptives}
+# ── Overall summary ───────────────────────────────────────
+desc_overall <- sim_data %>%
+  group_by(Condition, Correct_f) %>%
+  summarise(
+    N         = n(),
+    Mean_RT   = mean(RT)   %>% round(1),
+    Median_RT = median(RT) %>% round(1),
+    SD_RT     = sd(RT)     %>% round(1),
+    .groups   = "drop"
+  )
+
+desc_overall %>%
+  kbl(caption = "Table 1 · RT summary by Condition and Response Correctness",
+      col.names = c("Condition","Response","N",
+                    "Mean RT (ms)","Median RT (ms)","SD RT (ms)")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE) %>%
+  row_spec(which(desc_overall$Correct_f == "Correct"),
+           background = "#f0f7ff")
+
+# ── Accuracy per subject x condition ─────────────────────
+acc_subj <- sim_data %>%
+  group_by(Subject, Condition) %>%
+  summarise(Accuracy = mean(Correct), .groups = "drop")
+
+acc_summary <- acc_subj %>%
+  group_by(Condition) %>%
+  summarise(
+    Mean_Acc = mean(Accuracy) %>% round(3),
+    SD_Acc   = sd(Accuracy)   %>% round(3),
+    .groups  = "drop"
+  )
+
+acc_summary %>%
+  kbl(caption = "Table 2 · Accuracy by Condition (subject-level means)",
+      col.names = c("Condition", "Mean Accuracy", "SD")) %>%
+  kable_styling(bootstrap_options = c("striped","hover","condensed"),
+                full_width = FALSE)
+```
+
+---
+
+# 4 · Visualisation
+
+## 4.1 · Accuracy — the primary outcome
+
+```{r plot-accuracy, fig.height=5}
+# ── 4.1a  Subject-level accuracy + group mean ─────────────
+p_acc_lines <- ggplot(acc_subj,
+                      aes(x = Condition, y = Accuracy,
+                          group = Subject)) +
+  geom_line(colour = "grey60", linewidth = 0.5, alpha = 0.7) +
+  geom_point(colour = "grey40", size = 1.8,  alpha = 0.7) +
+  # group mean ± SE
+  stat_summary(aes(group = 1),
+               fun      = mean,
+               fun.min  = function(x) mean(x) - sd(x)/sqrt(length(x)),
+               fun.max  = function(x) mean(x) + sd(x)/sqrt(length(x)),
+               geom     = "pointrange",
+               colour   = "#2166AC",
+               linewidth = 1.2,
+               size      = 0.9) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0.4, 1.05)) +
+  labs(title    = "A · Accuracy per subject",
+       subtitle = "Grey = individual subjects | Blue = mean ± SE",
+       x = NULL, y = "Accuracy (% correct)") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+# ── 4.1b  Raincloud of accuracy ───────────────────────────
+p_acc_rain <- ggplot(acc_subj,
+                     aes(x = Condition, y = Accuracy,
+                         fill = Condition, colour = Condition)) +
+  ggdist::stat_halfeye(
+    adjust = 0.8, width = 0.5, .width = 0,
+    point_colour = NA,
+    position = position_nudge(x = 0.18),
+    alpha = 0.70) +
+  geom_boxplot(width = 0.18, outlier.shape = NA,
+               alpha = 0.5, colour = "grey30",
+               position = position_nudge(x = -0.12)) +
+  geom_jitter(width = 0.05, size = 2, alpha = 0.6) +
+  scale_fill_manual(values  = c("A (Easy)" = "#4393C3",
+                                "B (Hard)" = "#D6604D")) +
+  scale_colour_manual(values = c("A (Easy)" = "#2166AC",
+                                 "B (Hard)" = "#B2182B")) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0.4, 1.05)) +
+  labs(title    = "B · Accuracy distribution",
+       subtitle = "Box | Points | Density",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "none",
+        panel.grid.minor = element_blank())
+
+p_acc_lines + p_acc_rain +
+  plot_annotation(
+    title = "Figure 1 · Accuracy by Condition",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+```
+
+---
+
+## 4.2 · Reaction Time — correct trials (primary focus)
+
+```{r plot-rt-correct, fig.height=6}
+rt_correct <- sim_data %>% filter(Correct_f == "Correct")
+
+# Subject-level median RT (correct only)
+rt_subj <- rt_correct %>%
+  group_by(Subject, Condition) %>%
+  summarise(Median_RT = median(RT), .groups = "drop")
+
+# ── 4.2a  Subject trajectories ────────────────────────────
+p_rt_lines <- ggplot(rt_subj,
+                     aes(x = Condition, y = Median_RT,
+                         group = Subject)) +
+  geom_line(colour = "grey60", linewidth = 0.5, alpha = 0.7) +
+  geom_point(colour = "grey40", size = 1.8,  alpha = 0.7) +
+  stat_summary(aes(group = 1),
+               fun      = mean,
+               fun.min  = function(x) mean(x) - sd(x)/sqrt(length(x)),
+               fun.max  = function(x) mean(x) + sd(x)/sqrt(length(x)),
+               geom     = "pointrange",
+               colour   = "#1A7A4A",
+               linewidth = 1.2,
+               size      = 0.9) +
+  labs(title    = "A · Median RT per subject (correct trials)",
+       subtitle = "Grey = subjects | Green = mean ± SE",
+       x = NULL, y = "Median RT (ms)") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+# ── 4.2b  Raincloud of RT (correct) ──────────────────────
+p_rt_rain <- ggplot(rt_correct,
+                    aes(x = Condition, y = RT,
+                        fill = Condition, colour = Condition)) +
+  ggdist::stat_halfeye(
+    adjust = 0.8, width = 0.55, .width = 0,
+    point_colour = NA,
+    position = position_nudge(x = 0.18),
+    alpha = 0.70) +
+  geom_boxplot(width = 0.18, outlier.shape = NA,
+               alpha = 0.5, colour = "grey30",
+               position = position_nudge(x = -0.12)) +
+  geom_jitter(width = 0.05, size = 0.6, alpha = 0.35) +
+  scale_fill_manual(values  = c("A (Easy)" = "#74C476",
+                                "B (Hard)" = "#238B45")) +
+  scale_colour_manual(values = c("A (Easy)" = "#41AB5D",
+                                 "B (Hard)" = "#005A32")) +
+  labs(title    = "B · RT distribution (correct trials)",
+       subtitle = "Box | Points | Density",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "none",
+        panel.grid.minor = element_blank())
+
+p_rt_lines + p_rt_rain +
+  plot_annotation(
+    title = "Figure 2 · Reaction Time — Correct Trials",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+```
+
+---
+
+## 4.3 · RT full distribution — correct vs incorrect overlaid
+
+```{r plot-rt-both0, fig.height=5}
+# Density overlay: correct (filled) vs incorrect (outline only)
+# Kept secondary: incorrect shown as dashed outline, smaller alpha
+
+p_density <- ggplot(sim_data,
+                    aes(x = RT, fill = Correct_f,
+                        colour = Correct_f,
+                        linetype = Correct_f)) +
+  geom_density(alpha = 0.55, linewidth = 0.8, adjust = 1.1) +
+  # vertical medians
+  geom_vline(
+    data = sim_data %>%
+      group_by(Condition, Correct_f) %>%
+      summarise(med = median(RT), .groups = "drop"),
+    aes(xintercept = med,
+        colour     = Correct_f,
+        linetype   = Correct_f),
+    linewidth = 0.9) +
+  facet_wrap(~ Condition, nrow = 1) +
+  scale_fill_manual(
+    values = c("Correct"   = "#74C476",
+               "Incorrect" = "#FC8D59"),
+    name   = "Response") +
+  scale_colour_manual(
+    values = c("Correct"   = "#238B45",
+               "Incorrect" = "#D7301F"),
+    name   = "Response") +
+  scale_linetype_manual(
+    values = c("Correct"   = "solid",
+               "Incorrect" = "dashed"),
+    name   = "Response") +
+  scale_x_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title    = "Figure 3 · RT density: Correct vs Incorrect",
+       subtitle = "Vertical lines = median RT | Incorrect shown as dashed outline",
+       x        = "Reaction Time (ms)",
+       y        = "Density") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "bottom",
+        strip.background = element_rect(fill = "grey93", colour = NA),
+        strip.text       = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+
+print(p_density)
+```
+
+
+## 4.3bis · RT full distribution — Easy vs Hard overlaid
+
+```{r plot-rt-both, fig.height=5}
+
+p_density <- ggplot(sim_data,
+                    aes(x = RT, fill = Condition,
+                        colour = Condition)) +
+  geom_density(alpha = 0.55, linewidth = 0.8, adjust = 1.1) +
+  # vertical medians
+  geom_vline(
+    data = sim_data %>%
+      group_by(Correct_f,Condition) %>%
+      summarise(med = median(RT), .groups = "drop"),
+    aes(xintercept = med,
+        colour     = Condition),
+    linewidth = 0.9) +
+  facet_wrap(~ Correct_f, nrow = 1) +
+  scale_fill_manual(
+    values = c("A (Easy)"   = "#74C476",
+               "B (Hard)" = "#FC8D59"),
+    name   = "Response") +
+  scale_colour_manual(
+    values = c("A (Easy)"   = "#238B45",
+               "B (Hard)" = "#D7301F"),
+    name   = "Response") +
+  scale_x_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title    = "Figure 3 · RT density: Easy vs Hard",
+       subtitle = "Vertical lines = median RT",
+       x        = "Reaction Time (ms)",
+       y        = "Density") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "bottom",
+        strip.background = element_rect(fill = "grey93", colour = NA),
+        strip.text       = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+
+print(p_density)
+```
+
+---
+
+## 4.4 · Accuracy × RT trade-off per subject
+
+```{r plot-tradeoff, fig.height=5}
+# One point per subject x condition
+# x = accuracy, y = median correct RT
+# Reveals speed-accuracy trade-off at the individual level
+
+tradeoff_df <- sim_data %>%
+  group_by(Subject, Condition) %>%
+  summarise(
+    Accuracy  = mean(Correct),
+    Median_RT = median(RT[Correct == 1]),
+    .groups   = "drop"
+  )
+
+p_tradeoff <- ggplot(tradeoff_df,
+                     aes(x      = Accuracy,
+                         y      = Median_RT,
+                         colour = Condition,
+                         shape  = Condition)) +
+  # connect same subject across conditions
+  geom_line(aes(group = Subject),
+            colour    = "grey75",
+            linewidth = 0.45) +
+  geom_point(size = 3, alpha = 0.85) +
+  # group-level ellipses
+  stat_ellipse(level     = 0.80,
+               linewidth = 1.1,
+               linetype  = "dashed") +
+  scale_colour_manual(values = c("A (Easy)" = "#4393C3",
+                                 "B (Hard)" = "#D6604D")) +
+  scale_shape_manual(values  = c("A (Easy)" = 16,
+                                 "B (Hard)" = 17)) +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title    = "Figure 4 · Speed–Accuracy trade-off per subject",
+       subtitle = "Each point = one subject | Lines connect same subject across conditions | Ellipse = 80% CI",
+       x        = "Accuracy",
+       y        = "Median RT — correct trials (ms)",
+       colour   = "Condition",
+       shape    = "Condition") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank())
+
+print(p_tradeoff)
+```
+
+---
+
+## 4.5 · Trial-by-trial RT time course (learning / fatigue check)
+
+```{r plot-timecourse, fig.height=5}
+# Smooth RT trajectory across trials within each condition
+# Separate panels for correct / incorrect
+# Useful to detect practice effects or fatigue
+
+p_timecourse <- ggplot(sim_data,
+                       aes(x      = Trial,
+                           y      = RT,
+                           colour = Condition,
+                           fill   = Condition)) +
+  geom_smooth(method  = "loess",
+              span    = 0.55,
+              alpha   = 0.18,
+              linewidth = 1.1) +
+  facet_wrap(~ Correct_f, nrow = 1,
+             labeller = labeller(
+               Correct_f = c("Correct"   = "Correct trials",
+                             "Incorrect" = "Incorrect trials"))) +
+  scale_colour_manual(values = c("A (Easy)" = "#4393C3",
+                                 "B (Hard)" = "#D6604D")) +
+  scale_fill_manual(values   = c("A (Easy)" = "#4393C3",
+                                 "B (Hard)" = "#D6604D")) +
+  scale_y_continuous(labels  = comma_format(suffix = " ms")) +
+  labs(title    = "Figure 5 · RT time course across trials",
+       subtitle = "LOESS smooth ± 95% CI | Left = correct (primary) | Right = incorrect (secondary)",
+       x        = "Trial number",
+       y        = "RT (ms)",
+       colour   = "Condition",
+       fill     = "Condition") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "bottom",
+        strip.background = element_rect(fill = "grey93", colour = NA),
+        strip.text       = element_text(face = "bold",
+                                        size = 11),
+        panel.grid.minor = element_blank())
+
+print(p_timecourse)
+```
+
+---
+
+## 4.6 · Heatmap — subject × condition accuracy & RT
+
+```{r plot-heatmap, fig.height=6}
+# Two heatmaps side by side:
+# Left  = accuracy (primary)
+# Right = median correct RT (secondary)
+
+heat_df <- sim_data %>%
+  group_by(Subject, Condition) %>%
+  summarise(
+    Accuracy  = mean(Correct),
+    Median_RT = median(RT[Correct == 1]),
+    .groups   = "drop"
+  ) %>%
+  # order subjects by mean accuracy for readability
+  mutate(Subject = fct_reorder(Subject, Accuracy, mean))
+
+# ── Accuracy heatmap ──────────────────────────────────────
+p_heat_acc <- ggplot(heat_df,
+                     aes(x = Condition, y = Subject,
+                         fill = Accuracy)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = percent(Accuracy, accuracy = 1)),
+            size = 3, colour = "grey20") +
+  scale_fill_distiller(
+    palette  = "Blues",
+    direction = 1,
+    limits   = c(0.4, 1),
+    labels   = percent_format(accuracy = 1),
+    name     = "Accuracy") +
+  labs(title = "A · Accuracy",
+       x = NULL, y = "Subject") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid      = element_blank(),
+        axis.text.x     = element_text(face = "bold"),
+        legend.position = "right")
+
+# ── Median RT heatmap (correct trials) ───────────────────
+p_heat_rt <- ggplot(heat_df,
+                    aes(x = Condition, y = Subject,
+                        fill = Median_RT)) +
+  geom_tile(colour = "white", linewidth = 0.5) +
+  geom_text(aes(label = round(Median_RT)),
+            size = 3, colour = "grey20") +
+  scale_fill_distiller(
+    palette   = "Greens",
+    direction = -1,          # darker = slower
+    name      = "Median RT (ms)") +
+  labs(title = "B · Median RT — correct trials",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid      = element_blank(),
+        axis.text.x     = element_text(face = "bold"),
+        axis.text.y     = element_blank(),
+        legend.position = "right")
+
+p_heat_acc + p_heat_rt +
+  plot_annotation(
+    title = "Figure 6 · Subject-level heatmaps",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+```
+
+---
+
+# 5 · Quick Mixed-Model Check
+
+```{r mixed-models}
+# ── 5a. Accuracy (logistic GLMM) ─────────────────────────
+mod_acc <- glmer(Correct ~ Condition + (1 | Subject),
+                 data   = sim_data,
+                 family = binomial(link = "logit"))
+
+cat("=== Accuracy model ===\n")
+print(summary(mod_acc), correlation = FALSE)
+
+# ── 5b. RT — correct trials only (LMM, log-transformed) ──
+mod_rt <- lmer(log(RT) ~ Condition + (1 | Subject),
+               data = sim_data %>% filter(Correct == 1),
+               REML = TRUE)
+
+cat("\n=== RT model (correct trials, log-RT) ===\n")
+print(summary(mod_rt), correlation = FALSE)
+
+
+# ── 5c. RT difference: correct vs incorrect ───────────────
+# LMM with Correct_f as predictor, all trials
+# Random intercept per subject
+
+mod_rt_corr <- lmer(log(RT) ~ Condition * Correct_f + (1 | Subject),
+                    data = sim_data,
+                    REML = TRUE)
+
+cat("=== RT model: Condition × Correctness ===\n")
+print(summary(mod_rt_corr), correlation = FALSE)
+
+# Back-transform coefficients to ms scale for reporting
+fe <- fixef(mod_rt_corr)
+cat("\n--- Fixed effects (back-transformed to ms scale) ---\n")
+cat(sprintf("  Intercept [A, Correct]          : %.1f ms\n", exp(fe[1])))
+cat(sprintf("  Condition B vs A                : %+.1f ms\n",
+            exp(fe[1]) * (exp(fe[2]) - 1)))
+cat(sprintf("  Incorrect vs Correct            : %+.1f ms\n",
+            exp(fe[1]) * (exp(fe[3]) - 1)))
+```
+
+---
+
+# 6 · Summary Dashboard (patchwork)
+
+```{r dashboard, fig.height=14, fig.width=14}
+# Assemble the key plots into one dashboard
+# Priority layout:
+#   Row 1 (wide): Accuracy lines + Accuracy raincloud
+#   Row 2 (wide): RT lines (correct) + RT raincloud (correct)
+#   Row 3 (wide): RT density overlay + Speed-accuracy trade-off
+
+# ── Rebuild compact versions for the dashboard ────────────
+
+# -- Row 1: Accuracy --
+d1a <- ggplot(acc_subj,
+              aes(x = Condition, y = Accuracy, group = Subject)) +
+  geom_line(colour = "grey65", linewidth = 0.45, alpha = 0.65) +
+  geom_point(colour = "grey40", size = 1.5, alpha = 0.65) +
+  stat_summary(aes(group = 1),
+               fun     = mean,
+               fun.min = function(x) mean(x) - sd(x)/sqrt(length(x)),
+               fun.max = function(x) mean(x) + sd(x)/sqrt(length(x)),
+               geom    = "pointrange",
+               colour  = "#2166AC",
+               linewidth = 1.1, size = 0.8) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0.4, 1.05)) +
+  labs(title = "Accuracy — subject trajectories",
+       x = NULL, y = "Accuracy") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank())
+
+d1b <- ggplot(acc_subj,
+              aes(x = Condition, y = Accuracy,
+                  fill = Condition, colour = Condition)) +
+  ggdist::stat_halfeye(
+    adjust = 0.8, width = 0.5, .width = 0,
+    point_colour = NA,
+    position = position_nudge(x = 0.18),
+    alpha = 0.70) +
+  geom_boxplot(width = 0.18, outlier.shape = NA,
+               alpha = 0.5, colour = "grey30",
+               position = position_nudge(x = -0.12)) +
+  geom_jitter(width = 0.05, size = 1.8, alpha = 0.6) +
+  scale_fill_manual(values  = c("A (Easy)" = "#4393C3",
+                                "B (Hard)" = "#D6604D")) +
+  scale_colour_manual(values = c("A (Easy)" = "#2166AC",
+                                 "B (Hard)" = "#B2182B")) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0.4, 1.05)) +
+  labs(title = "Accuracy — distribution",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position  = "none",
+        panel.grid.minor = element_blank())
+
+# -- Row 2: RT correct trials --
+d2a <- ggplot(rt_subj,
+              aes(x = Condition, y = Median_RT, group = Subject)) +
+  geom_line(colour = "grey65", linewidth = 0.45, alpha = 0.65) +
+  geom_point(colour = "grey40", size = 1.5, alpha = 0.65) +
+  stat_summary(aes(group = 1),
+               fun     = mean,
+               fun.min = function(x) mean(x) - sd(x)/sqrt(length(x)),
+               fun.max = function(x) mean(x) + sd(x)/sqrt(length(x)),
+               geom    = "pointrange",
+               colour  = "#1A7A4A",
+               linewidth = 1.1, size = 0.8) +
+  labs(title = "RT (correct) — subject trajectories",
+       x = NULL, y = "Median RT (ms)") +
+  theme_minimal(base_size = 11) +
+  theme(panel.grid.minor = element_blank())
+
+d2b <- ggplot(rt_correct,
+              aes(x = Condition, y = RT,
+                  fill = Condition, colour = Condition)) +
+  ggdist::stat_halfeye(
+    adjust = 0.8, width = 0.55, .width = 0,
+    point_colour = NA,
+    position = position_nudge(x = 0.18),
+    alpha = 0.70) +
+  geom_boxplot(width = 0.18, outlier.shape = NA,
+               alpha = 0.5, colour = "grey30",
+               position = position_nudge(x = -0.12)) +
+  geom_jitter(width = 0.05, size = 0.5, alpha = 0.25) +
+  scale_fill_manual(values  = c("A (Easy)" = "#74C476",
+                                "B (Hard)" = "#238B45")) +
+  scale_colour_manual(values = c("A (Easy)" = "#41AB5D",
+                                 "B (Hard)" = "#005A32")) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title = "RT (correct) — distribution",
+       x = NULL, y = NULL) +
+  theme_minimal(base_size = 11) +
+  theme(legend.position  = "none",
+        panel.grid.minor = element_blank())
+
+# -- Row 3: Density overlay + trade-off --
+d3a <- ggplot(sim_data,
+              aes(x = RT, fill = Correct_f,
+                  colour   = Correct_f,
+                  linetype = Correct_f)) +
+  geom_density(alpha = 0.50, linewidth = 0.75, adjust = 1.1) +
+  geom_vline(
+    data = sim_data %>%
+      group_by(Condition, Correct_f) %>%
+      summarise(med = median(RT), .groups = "drop"),
+    aes(xintercept = med,
+        colour     = Correct_f,
+        linetype   = Correct_f),
+    linewidth = 0.85) +
+  facet_wrap(~ Condition, nrow = 1) +
+  scale_fill_manual(
+    values = c("Correct" = "#74C476", "Incorrect" = "#FC8D59"),
+    name   = "Response") +
+  scale_colour_manual(
+    values = c("Correct" = "#238B45", "Incorrect" = "#D7301F"),
+    name   = "Response") +
+  scale_linetype_manual(
+    values = c("Correct" = "solid",   "Incorrect" = "dashed"),
+    name   = "Response") +
+  scale_x_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title = "RT density: Correct vs Incorrect",
+       x = "RT (ms)", y = "Density") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position  = "bottom",
+        strip.background = element_rect(fill = "grey93", colour = NA),
+        strip.text       = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+
+d3b <- ggplot(tradeoff_df,
+              aes(x      = Accuracy,
+                  y      = Median_RT,
+                  colour = Condition,
+                  shape  = Condition)) +
+  geom_line(aes(group = Subject),
+            colour = "grey75", linewidth = 0.4) +
+  geom_point(size = 2.8, alpha = 0.85) +
+  stat_ellipse(level = 0.80, linewidth = 1.0, linetype = "dashed") +
+  scale_colour_manual(values = c("A (Easy)" = "#4393C3",
+                                 "B (Hard)" = "#D6604D")) +
+  scale_shape_manual(values  = c("A (Easy)" = 16,
+                                 "B (Hard)" = 17)) +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title  = "Speed–Accuracy trade-off",
+       x      = "Accuracy",
+       y      = "Median RT — correct (ms)",
+       colour = "Condition",
+       shape  = "Condition") +
+  theme_minimal(base_size = 11) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank())
+
+# ── Assemble dashboard ────────────────────────────────────
+(d1a | d1b) /
+(d2a | d2b) /
+(d3a | d3b) +
+  plot_annotation(
+    title   = "EDA Dashboard — Reaction Time Experiment",
+    subtitle = paste("N =", n_subj, "subjects |",
+                     n_trials, "trials per condition |",
+                     "Conditions: Easy vs Hard"),
+    caption = "Primary focus: accuracy & correct-trial RT | Secondary: incorrect-trial RT",
+    theme   = theme(
+      plot.title    = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 12, colour = "grey40"),
+      plot.caption  = element_text(size = 9,  colour = "grey55",
+                                   hjust = 0)
+    )
+  )
+```
+
+---
+
+# 7 · Session Info
+
+```{r session-info}
+sessionInfo()
+```
+
+
+---
+
+## What each section contributes
+
+| Section | Plot / Analysis | Primary focus |
+|---|---|---|
+| §3 | Descriptive tables | Accuracy first, RT second |
+| §4.1 | Trajectories + raincloud | **Accuracy** ← main outcome |
+| §4.2 | Trajectories + raincloud | **RT — correct only** |
+| §4.3 | Density overlay | Correct (filled) vs Incorrect (dashed) |
+| §4.4 | Speed–accuracy scatter | Individual trade-off |
+| §4.5 | LOESS time course | Practice / fatigue check |
+| §4.6 | Heatmaps | Subject × condition overview |
+| §5 | GLMM (accuracy) + LMM (RT) | Confirmatory quick check |
+| §6 | PatchworkContinuing from where the response was cut off — the dashboard assembly and remaining sections:
+
+
+---
+
+## What each section contributes
+
+| Section | Plot / Analysis | Primary focus |
+|---|---|---|
+| §3 | Descriptive tables | Accuracy first, RT second |
+| §4.1 | Trajectories + raincloud | **Accuracy** ← main outcome |
+| §4.2 | Trajectories + raincloud | **RT — correct only** |
+| §4.3 | Density overlay | Correct (filled) vs Incorrect (dashed) |
+| §4.4 | Speed–accuracy scatter | Individual trade-off |
+| §4.5 | LOESS time course | Practice / fatigue check |
+| §4.6 | Heatmaps | Subject × condition overview |
+| §5 | GLMM (accuracy) + LMM (RT) | Confirmatory quick check |
+| §6 | Patchwork dashboard | All key plots in one figure |
+
+---
+
+# Appendix A · Supplementary Plots
+
+## A.1 · Per-subject RT distributions (correct trials only)
+
+```{r appendix-subj-rt, fig.height=10, fig.width=14}
+# Small-multiple density per subject, coloured by condition
+# Useful to spot outlier subjects or bimodal distributions
+
+ggplot(rt_correct,
+       aes(x = RT, fill = Condition, colour = Condition)) +
+  geom_density(alpha = 0.45, linewidth = 0.6, adjust = 1.2) +
+  geom_rug(alpha = 0.25, linewidth = 0.3) +
+  facet_wrap(~ Subject, ncol = 6) +
+  scale_fill_manual(values  = c("A (Easy)" = "#74C476",
+                                "B (Hard)" = "#238B45")) +
+  scale_colour_manual(values = c("A (Easy)" = "#41AB5D",
+                                 "B (Hard)" = "#005A32")) +
+  scale_x_continuous(labels = comma_format(suffix = " ms"),
+                     breaks = c(300, 500, 700)) +
+  labs(title    = "Figure A1 · RT distribution per subject (correct trials)",
+       subtitle = "Each panel = one subject | Rug = individual observations",
+       x        = "RT (ms)",
+       y        = "Density",
+       fill     = "Condition",
+       colour   = "Condition") +
+  theme_minimal(base_size = 10) +
+  theme(
+    legend.position  = "bottom",
+    strip.background = element_rect(fill = "grey93", colour = NA),
+    strip.text       = element_text(face = "bold", size = 8),
+    panel.grid.minor = element_blank(),
+    axis.text.x      = element_text(size = 7, angle = 30, hjust = 1)
+  )
+```
+
+---
+
+## A.2 · Quantile–Quantile plot of log(RT) by condition
+
+```{r appendix-qq, fig.height=5}
+# Check log-normality assumption used in the LMM
+
+qq_df <- rt_correct %>%
+  group_by(Condition) %>%
+  mutate(
+    log_RT       = log(RT),
+    theoretical  = qnorm(ppoints(n())),
+    sample_q     = sort(log_RT)
+  ) %>%
+  ungroup()
+
+p_qq <- ggplot(qq_df,
+               aes(x = theoretical, y = sample_q,
+                   colour = Condition)) +
+  geom_point(size = 0.9, alpha = 0.5) +
+  geom_qq_line(aes(sample = log_RT),
+               linewidth = 0.9,
+               linetype  = "dashed") +
+  facet_wrap(~ Condition, nrow = 1) +
+  scale_colour_manual(values = c("A (Easy)" = "#41AB5D",
+                                 "B (Hard)" = "#005A32")) +
+  labs(title    = "Figure A2 · Q-Q plot of log(RT) — correct trials",
+       subtitle = "Points should follow the dashed line if log-normal",
+       x        = "Theoretical quantiles",
+       y        = "Sample quantiles  [log(ms)]") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "none",
+        strip.background = element_rect(fill = "grey93", colour = NA),
+        strip.text       = element_text(face = "bold"),
+        panel.grid.minor = element_blank())
+
+print(p_qq)
+```
+
+---
+
+## A.3 · Conditional accuracy function (CAF)
+
+```{r appendix-caf, fig.height=5}
+# CAF: accuracy as a function of RT quintile
+# Reveals whether fast responses are less accurate (speed-accuracy trade-off)
+# Computed separately per condition
+
+caf_df <- sim_data %>%
+  group_by(Subject, Condition) %>%
+  mutate(
+    RT_quintile = ntile(RT, 5)   # 5 equal-frequency bins per subject x condition
+  ) %>%
+  group_by(Condition, RT_quintile) %>%
+  summarise(
+    Accuracy = mean(Correct),
+    RT_mean  = mean(RT),
+    n        = n(),
+    .groups  = "drop"
+  )
+
+p_caf <- ggplot(caf_df,
+                aes(x      = RT_quintile,
+                    y      = Accuracy,
+                    colour = Condition,
+                    group  = Condition)) +
+  geom_line(linewidth = 1.1) +
+  geom_point(aes(size = n), alpha = 0.85) +
+  geom_hline(yintercept = 0.5,
+             linetype   = "dashed",
+             colour     = "grey50") +
+  scale_colour_manual(values = c("A (Easy)" = "#4393C3",
+                                 "B (Hard)" = "#D6604D")) +
+  scale_y_continuous(labels = percent_format(accuracy = 1),
+                     limits = c(0.3, 1.05)) +
+  scale_x_continuous(breaks = 1:5,
+                     labels = c("Q1\n(fastest)",
+                                "Q2", "Q3", "Q4",
+                                "Q5\n(slowest)")) +
+  scale_size_continuous(range = c(2, 6), guide = "none") +
+  labs(title    = "Figure A3 · Conditional Accuracy Function (CAF)",
+       subtitle = "Accuracy per RT quintile | Point size ∝ N trials",
+       x        = "RT quintile",
+       y        = "Accuracy",
+       colour   = "Condition") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position  = "bottom",
+        panel.grid.minor = element_blank())
+
+print(p_caf)
+```
+
+---
+
+## A.4 · Delta plot — RT quantile differences between conditions
+
+```{r appendix-delta, fig.height=5}
+# Delta plot: x = mean RT quantile across conditions
+#             y = RT difference (B - A) at each quantile
+# If the slope is positive, the condition effect grows with RT
+# (common in inhibition / conflict paradigms)
+
+delta_df <- sim_data %>%
+  filter(Correct == 1) %>%
+  group_by(Subject, Condition) %>%
+  summarise(
+    q = list(quantile(RT, probs = seq(0.1, 0.9, by = 0.2))),
+    .groups = "drop"
+  ) %>%
+  unnest_wider(q) %>%
+  pivot_longer(cols      = -c(Subject, Condition),
+               names_to  = "Quantile",
+               values_to = "RT_q") %>%
+  pivot_wider(names_from  = Condition,
+              values_from = RT_q) %>%
+  rename(RT_A = `A (Easy)`,
+         RT_B = `B (Hard)`) %>%
+  mutate(
+    RT_mean  = (RT_A + RT_B) / 2,
+    RT_delta = RT_B - RT_A
+  ) %>%
+  group_by(Quantile) %>%
+  summarise(
+    mean_x    = mean(RT_mean,  na.rm = TRUE),
+    mean_delta = mean(RT_delta, na.rm = TRUE),
+    se_delta  = sd(RT_delta,   na.rm = TRUE) /
+                sqrt(sum(!is.na(RT_delta))),
+    .groups   = "drop"
+  )
+
+p_delta <- ggplot(delta_df,
+                  aes(x = mean_x, y = mean_delta)) +
+  geom_hline(yintercept = 0,
+             linetype   = "dashed",
+             colour     = "grey50") +
+  geom_ribbon(aes(ymin = mean_delta - 1.96 * se_delta,
+                  ymax = mean_delta + 1.96 * se_delta),
+              fill  = "#9ECAE1",
+              alpha = 0.40) +
+  geom_line(colour    = "#2166AC",
+            linewidth = 1.2) +
+  geom_point(colour = "#2166AC",
+             size   = 3.5) +
+  scale_x_continuous(labels = comma_format(suffix = " ms")) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(title    = "Figure A4 · Delta plot: RT(Hard) − RT(Easy) across quantiles",
+       subtitle = "Ribbon = 95% CI | Positive slope → condition effect grows for slower responses",
+       x        = "Mean RT across conditions (ms)",
+       y        = "ΔRT  [B(Hard) − A(Easy)]  (ms)") +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+print(p_delta)
+```
+
+---
+
+# Appendix B · Reporting-ready Summary Table
+
+```{r final-table}
+# One clean table: Condition x Response x {N, %, Mean RT, Median RT, SD RT}
+
+final_table <- sim_data %>%
+  group_by(Condition, Correct_f) %>%
+  summarise(
+    N          = n(),
+    Pct        = n() / nrow(sim_data),
+    Mean_RT    = mean(RT),
+    Median_RT  = median(RT),
+    SD_RT      = sd(RT),
+    .groups    = "drop"
+  ) %>%
+  mutate(across(c(Mean_RT, Median_RT, SD_RT),
+                ~ round(.x, 1)),
+         Pct = percent(Pct, accuracy = 0.1))
+
+final_table %>%
+  kbl(
+    caption   = "Table B1 · Full descriptive summary",
+    col.names = c("Condition", "Response", "N", "%",
+                  "Mean RT (ms)", "Median RT (ms)", "SD RT (ms)"),
+    align     = c("l","l","r","r","r","r","r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed", "bordered"),
+    full_width        = FALSE,
+    position          = "left"
+  ) %>%
+  row_spec(
+    which(final_table$Correct_f == "Correct"),
+    background = "#f0f7ff",
+    bold       = FALSE
+  ) %>%
+  row_spec(
+    which(final_table$Correct_f == "Incorrect"),
+    color = "grey50"
+  ) %>%
+  pack_rows("Easy condition",  1, 2) %>%
+  pack_rows("Hard condition",  3, 4) %>%
+  footnote(
+    general = paste(
+      "Correct trials highlighted in blue.",
+      "Incorrect trials shown in grey (secondary interest).",
+      "RT = Reaction Time in milliseconds."
+    ),
+    general_title = "Note: "
+  )
+```
+
+---
+
+# Appendix C · Effect Size & Power Summary
+
+```{r effect-sizes}
+# ── Cohen's d for Condition effect on RT (correct trials) ──
+rt_wide <- rt_subj %>%
+  pivot_wider(names_from  = Condition,
+              values_from = Median_RT)
+
+d_rt <- (mean(rt_wide$`B (Hard)`) - mean(rt_wide$`A (Easy)`)) /
+        sd(rt_wide$`A (Easy)` - rt_wide$`B (Hard)`)
+
+# ── Cohen's d for Condition effect on Accuracy ─────────────
+acc_wide <- acc_subj %>%
+  pivot_wider(names_from  = Condition,
+              values_from = Accuracy)
+
+d_acc <- (mean(acc_wide$`B (Hard)`) - mean(acc_wide$`A (Easy)`)) /
+         sd(acc_wide$`A (Easy)` - acc_wide$`B (Hard)`)
+
+# ── RT difference: correct vs incorrect ────────────────────
+rt_corr_vs_inc <- sim_data %>%
+  group_by(Subject, Correct_f) %>%
+  summarise(Median_RT = median(RT), .groups = "drop") %>%
+  pivot_wider(names_from  = Correct_f,
+              values_from = Median_RT) %>%
+  mutate(Delta = Incorrect - Correct)
+
+d_corr_inc <- mean(rt_corr_vs_inc$Delta) /
+              sd(rt_corr_vs_inc$Delta)
+
+# ── Summary table ───────────────────────────────────────────
+effect_tab <- tibble(
+  Comparison              = c(
+    "RT: Hard vs Easy (correct trials)",
+    "Accuracy: Hard vs Easy",
+    "RT: Incorrect vs Correct (all conditions)"
+  ),
+  Mean_diff = c(
+    mean(rt_wide$`B (Hard)` - rt_wide$`A (Easy)`),
+    mean(acc_wide$`B (Hard)` - acc_wide$`A (Easy)`),
+    mean(rt_corr_vs_inc$Delta)
+  ),
+  Cohen_d   = c(d_rt, d_acc, d_corr_inc),
+  Magnitude = case_when(
+    abs(c(d_rt, d_acc, d_corr_inc)) >= 0.8 ~ "Large",
+    abs(c(d_rt, d_acc, d_corr_inc)) >= 0.5 ~ "Medium",
+    abs(c(d_rt, d_acc, d_corr_inc)) >= 0.2 ~ "Small",
+    TRUE                                    ~ "Negligible"
+  )
+)
+
+effect_tab %>%
+  mutate(
+    Mean_diff = round(Mean_diff, 3),
+    Cohen_d   = round(Cohen_d,   3)
+  ) %>%
+  kbl(
+    caption   = "Table C1 · Effect sizes (Cohen's d, paired)",
+    col.names = c("Comparison", "Mean difference",
+                  "Cohen's d", "Magnitude"),
+    align     = c("l", "r", "r", "l")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE
+  ) %>%
+  footnote(
+    general       = "Cohen's d computed on subject-level paired differences.",
+    general_title = "Note: "
+  )
+```
+
+---
+
+# Appendix D · Paired t-tests (descriptive, not confirmatory)
+
+```{r paired-ttests}
+# Quick paired t-tests as a descriptive complement to the LMMs
+# These do NOT replace the mixed models but give an intuitive summary
+
+# ── D1. Accuracy: A vs B ────────────────────────────────────
+t_acc <- t.test(
+  acc_wide$`A (Easy)`,
+  acc_wide$`B (Hard)`,
+  paired = TRUE
+)
+
+# ── D2. RT (correct): A vs B ────────────────────────────────
+t_rt <- t.test(
+  rt_wide$`A (Easy)`,
+  rt_wide$`B (Hard)`,
+  paired = TRUE
+)
+
+# ── D3. RT: Correct vs Incorrect ────────────────────────────
+t_corr_inc <- t.test(
+  rt_corr_vs_inc$Correct,
+  rt_corr_vs_inc$Incorrect,
+  paired = TRUE
+)
+
+# ── Tidy output ─────────────────────────────────────────────
+ttest_tab <- tibble(
+  Test = c(
+    "Accuracy: Easy vs Hard",
+    "RT (correct): Easy vs Hard",
+    "RT: Correct vs Incorrect"
+  ),
+  t_stat  = c(t_acc$statistic,
+              t_rt$statistic,
+              t_corr_inc$statistic),
+  df      = c(t_acc$parameter,
+              t_rt$parameter,
+              t_corr_inc$parameter),
+  p_value = c(t_acc$p.value,
+              t_rt$p.value,
+              t_corr_inc$p.value),
+  CI_low  = c(t_acc$conf.int[1],
+              t_rt$conf.int[1],
+              t_corr_inc$conf.int[1]),
+  CI_high = c(t_acc$conf.int[2],
+              t_rt$conf.int[2],
+              t_corr_inc$conf.int[2])
+) %>%
+  mutate(across(where(is.numeric), ~ round(.x, 3)),
+         p_value = ifelse(p_value < 0.001, "< .001",
+                          as.character(p_value)))
+
+ttest_tab %>%
+  kbl(
+    caption   = "Table D1 · Paired t-tests (descriptive summary)",
+    col.names = c("Test", "t", "df", "p",
+                  "95% CI low", "95% CI high"),
+    align     = c("l","r","r","r","r","r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped","hover","condensed"),
+    full_width        = FALSE
+  ) %>%
+  row_spec(which(ttest_tab$p_value == "< .001"),
+           bold = TRUE) %>%
+  footnote(
+    general = paste(
+      "Paired t-tests on subject-level means/medians.",
+      "Provided as descriptive complement to the LMMs in §5.",
+      "Not corrected for multiple comparisons."
+    ),
+    general_title = "Note: "
+  )
+```
+
+---
+
+# Appendix E · Final Composite Figure (publication-ready)
+
+```{r pub-figure, fig.height=12, fig.width=14}
+# A clean 2x2 figure suitable for a manuscript:
+#   [A] Accuracy trajectories     [B] RT correct trajectories
+#   [C] RT density overlay        [D] Speed-accuracy trade-off
+
+# ── Panel A: Accuracy ───────────────────────────────────────
+pA <- ggplot(acc_subj,
+             aes(x = Condition, y = Accuracy,
+                 group = Subject)) +
+  geom_line(colour = "grey70", linewidth = 0.45, alpha = 0.65) +
+  geom_point(colour = "grey50", size = 1.6,  alpha = 0.65) +
+  stat_summary(
+    aes(group = 1),
+    fun     = mean,
+    fun.min = function(x) mean(x) - sd(x) / sqrt(length(x)),
+    fun.max = function(x) mean(x) + sd(x) / sqrt(length(x)),
+    geom    = "pointrange",
+    colour  = "#2166AC",
+    linewidth = 1.2,
+    size    = 0.9
+  ) +
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    limits = c(0.4, 1.05)
+  ) +
+  labs(
+    tag      = "A",
+    title    = "Accuracy",
+    subtitle = "Subject trajectories & mean ± SE",
+    x        = NULL,
+    y        = "Accuracy (% correct)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.tag         = element_text(face = "bold", size = 14),
+    panel.grid.minor = element_blank()
+  )
+
+# ── Panel B: RT correct trials ──────────────────────────────
+pB <- ggplot(rt_subj,
+             aes(x = Condition, y = Median_RT,
+                 group = Subject)) +
+  geom_line(colour = "grey70", linewidth = 0.45, alpha = 0.65) +
+  geom_point(colour = "grey50", size = 1.6,  alpha = 0.65) +
+  stat_summary(
+    aes(group = 1),
+    fun     = mean,
+    fun.min = function(x) mean(x) - sd(x) / sqrt(length(x)),
+    fun.max = function(x) mean(x) + sd(x) / sqrt(length(x)),
+    geom    = "pointrange",
+    colour  = "#1A7A4A",
+    linewidth = 1.2,
+    size    = 0.9
+  ) +
+  scale_y_continuous(
+    labels = comma_format(suffix = " ms")
+  ) +
+  labs(
+    tag      = "B",
+    title    = "Reaction Time — correct trials",
+    subtitle = "Subject trajectories & mean ± SE",
+    x        = NULL,
+    y        = "Median RT (ms)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.tag         = element_text(face = "bold", size = 14),
+    panel.grid.minor = element_blank()
+  )
+
+# ── Panel C: RT density overlay ─────────────────────────────
+pC <- ggplot(sim_data,
+             aes(x        = RT,
+                 fill     = Correct_f,
+                 colour   = Correct_f,
+                 linetype = Correct_f)) +
+  geom_density(alpha = 0.50, linewidth = 0.75, adjust = 1.1) +
+  geom_vline(
+    data = sim_data %>%
+      group_by(Condition, Correct_f) %>%
+      summarise(med = median(RT), .groups = "drop"),
+    aes(xintercept = med,
+        colour     = Correct_f,
+        linetype   = Correct_f),
+    linewidth = 0.85
+  ) +
+  facet_wrap(~ Condition, nrow = 1) +
+  scale_fill_manual(
+    values = c("Correct"   = "#74C476",
+               "Incorrect" = "#FC8D59"),
+    name   = "Response"
+  ) +
+  scale_colour_manual(
+    values = c("Correct"   = "#238B45",
+               "Incorrect" = "#D7301F"),
+    name   = "Response" ) +
+    scale_linetype_manual(
+    values = c("Correct"   = "solid",
+               "Incorrect" = "dashed"),
+    name   = "Response"
+  ) +
+  scale_x_continuous(labels = comma_format(suffix = " ms")) +
+  labs(
+    tag      = "C",
+    title    = "RT distribution: Correct vs Incorrect",
+    subtitle = "Vertical lines = median | Incorrect = dashed outline",
+    x        = "Reaction Time (ms)",
+    y        = "Density"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.tag         = element_text(face = "bold", size = 14),
+    legend.position  = "bottom",
+    strip.background = element_rect(fill = "grey93", colour = NA),
+    strip.text       = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+# ── Panel D: Speed–Accuracy trade-off ───────────────────────
+pD <- ggplot(tradeoff_df,
+             aes(x      = Accuracy,
+                 y      = Median_RT,
+                 colour = Condition,
+                 shape  = Condition)) +
+  geom_line(aes(group = Subject),
+            colour    = "grey75",
+            linewidth = 0.4) +
+  geom_point(size = 3, alpha = 0.85) +
+  stat_ellipse(level     = 0.80,
+               linewidth = 1.0,
+               linetype  = "dashed") +
+  scale_colour_manual(
+    values = c("A (Easy)" = "#4393C3",
+               "B (Hard)" = "#D6604D")
+  ) +
+  scale_shape_manual(
+    values = c("A (Easy)" = 16,
+               "B (Hard)" = 17)
+  ) +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(
+    tag      = "D",
+    title    = "Speed–Accuracy trade-off",
+    subtitle = "Each point = one subject | Lines connect same subject",
+    x        = "Accuracy",
+    y        = "Median RT — correct trials (ms)",
+    colour   = "Condition",
+    shape    = "Condition"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.tag         = element_text(face = "bold", size = 14),
+    legend.position  = "bottom",
+    panel.grid.minor = element_blank()
+  )
+
+# ── Assemble publication figure ─────────────────────────────
+(pA | pB) / (pC | pD) +
+  plot_annotation(
+    title   = "Reaction Time Experiment — Summary",
+    subtitle = paste0(
+      "N = ", n_subj, " subjects | ",
+      n_trials, " trials/condition | ",
+      "Within-subject design | ",
+      "Condition: Easy vs Hard"
+    ),
+    caption = paste(
+      "Panels A–B: primary outcomes (accuracy & correct-trial RT).",
+      "Panel C: RT distributions, correct (solid) vs incorrect (dashed).",
+      "Panel D: individual speed–accuracy trade-off.",
+      sep = "\n"
+    ),
+    theme = theme(
+      plot.title    = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 11, colour = "grey40"),
+      plot.caption  = element_text(size  = 9,  colour = "grey55",
+                                   hjust = 0,  lineheight = 1.4)
+    )
+  )
+```
+
+---
+
+# Appendix F · Inverse Efficiency Score (IES)
+
+```{r ies, fig.height=5}
+# IES = Mean RT (correct) / Accuracy
+# Combines speed and accuracy into a single index:
+#   lower IES = better performance
+# Townsend & Ashby (1983)
+
+ies_df <- sim_data %>%
+  group_by(Subject, Condition) %>%
+  summarise(
+    Mean_RT_correct = mean(RT[Correct == 1], na.rm = TRUE),
+    Accuracy        = mean(Correct),
+    IES             = Mean_RT_correct / Accuracy,
+    .groups         = "drop"
+  )
+
+ies_summary <- ies_df %>%
+  group_by(Condition) %>%
+  summarise(
+    IES_mean = mean(IES),
+    IES_se   = sd(IES) / sqrt(n()),
+    .groups  = "drop"
+  )
+
+# ── F1. IES per subject ──────────────────────────────────────
+p_ies_lines <- ggplot(ies_df,
+                      aes(x = Condition, y = IES,
+                          group = Subject)) +
+  geom_line(colour = "grey65", linewidth = 0.5, alpha = 0.65) +
+  geom_point(colour = "grey40", size = 1.8, alpha = 0.65) +
+  stat_summary(
+    aes(group = 1),
+    fun     = mean,
+    fun.min = function(x) mean(x) - sd(x) / sqrt(length(x)),
+    fun.max = function(x) mean(x) + sd(x) / sqrt(length(x)),
+    geom    = "pointrange",
+    colour  = "#7B2D8B",
+    linewidth = 1.2,
+    size    = 0.9
+  ) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(
+    title    = "A · IES per subject",
+    subtitle = "Grey = subjects | Purple = mean ± SE | Lower = better",
+    x        = NULL,
+    y        = "IES (ms / accuracy)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(panel.grid.minor = element_blank())
+
+# ── F2. IES raincloud ────────────────────────────────────────
+p_ies_rain <- ggplot(ies_df,
+                     aes(x      = Condition,
+                         y      = IES,
+                         fill   = Condition,
+                         colour = Condition)) +
+  ggdist::stat_halfeye(
+    adjust       = 0.8,
+    width        = 0.5,
+    .width       = 0,
+    point_colour = NA,
+    position     = position_nudge(x = 0.18),
+    alpha        = 0.70
+  ) +
+  geom_boxplot(
+    width         = 0.18,
+    outlier.shape = NA,
+    alpha         = 0.50,
+    colour        = "grey30",
+    position      = position_nudge(x = -0.12)
+  ) +
+  geom_jitter(width = 0.05, size = 2, alpha = 0.65) +
+  scale_fill_manual(
+    values = c("A (Easy)" = "#C994C7",
+               "B (Hard)" = "#7B2D8B")
+  ) +
+  scale_colour_manual(
+    values = c("A (Easy)" = "#984EA3",
+               "B (Hard)" = "#49006A")
+  ) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(
+    title    = "B · IES distribution",
+    subtitle = "Box | Points | Density",
+    x        = NULL,
+    y        = NULL
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position  = "none",
+    panel.grid.minor = element_blank()
+  )
+
+p_ies_lines + p_ies_rain +
+  plot_annotation(
+    title = "Figure F1 · Inverse Efficiency Score (IES) by Condition",
+    theme = theme(plot.title = element_text(face = "bold", size = 14))
+  )
+```
+
+---
+
+# Appendix G · Correct-trial RT split by preceding trial outcome
+
+```{r post-error, fig.height=5}
+# Post-error slowing (PES):
+# Is RT on trial N slower when trial N-1 was incorrect?
+# Classic finding in cognitive control research
+
+pes_df <- sim_data %>%
+  arrange(Subject, Condition, Trial) %>%
+  group_by(Subject, Condition) %>%
+  mutate(
+    Prev_correct = lag(Correct_f, 1)
+  ) %>%
+  ungroup() %>%
+  filter(
+    Correct    == 1,              # current trial correct only
+    !is.na(Prev_correct)          # exclude first trial
+  ) %>%
+  mutate(
+    Prev_correct = factor(
+      Prev_correct,
+      levels = c("Correct", "Incorrect"),
+      labels = c("Post-correct", "Post-error")
+    )
+  )
+
+# Subject-level medians
+pes_subj <- pes_df %>%
+  group_by(Subject, Condition, Prev_correct) %>%
+  summarise(Median_RT = median(RT), .groups = "drop")
+
+p_pes <- ggplot(pes_subj,
+                aes(x      = Prev_correct,
+                    y      = Median_RT,
+                    fill   = Prev_correct,
+                    colour = Prev_correct)) +
+  ggdist::stat_halfeye(
+    adjust       = 0.8,
+    width        = 0.45,
+    .width       = 0,
+    point_colour = NA,
+    position     = position_nudge(x = 0.15),
+    alpha        = 0.65
+  ) +
+  geom_boxplot(
+    width         = 0.16,
+    outlier.shape = NA,
+    alpha         = 0.45,
+    colour        = "grey30",
+    position      = position_nudge(x = -0.10)
+  ) +
+  geom_line(
+    aes(group = Subject),
+    colour    = "grey70",
+    linewidth = 0.4,
+    alpha     = 0.60
+  ) +
+  geom_point(size = 1.8, alpha = 0.65) +
+  facet_wrap(~ Condition, nrow = 1) +
+  scale_fill_manual(
+    values = c("Post-correct" = "#9ECAE1",
+               "Post-error"   = "#FC8D59"),
+    name   = "Previous trial"
+  ) +
+  scale_colour_manual(
+    values = c("Post-correct" = "#2166AC",
+               "Post-error"   = "#D7301F"),
+    name   = "Previous trial"
+  ) +
+  scale_y_continuous(labels = comma_format(suffix = " ms")) +
+  labs(
+    title    = "Figure G1 · Post-error slowing (correct trials only)",
+    subtitle = "RT on trial N as a function of trial N−1 outcome",
+    x        = "Previous trial outcome",
+    y        = "Median RT (ms)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    legend.position  = "bottom",
+    strip.background = element_rect(fill = "grey93", colour = NA),
+    strip.text       = element_text(face = "bold"),
+    panel.grid.minor = element_blank()
+  )
+
+print(p_pes)
+```
+
+
+---
+
+# Appendix H · Save all figures
+
+```{r save-figures, eval=FALSE}
+# ── Helper: save with consistent settings ───────────────────
+save_fig <- function(plot, filename,
+                     width  = 12,
+                     height = 8,
+                     dpi    = 300) {
+  ggsave(
+    filename = file.path("figures", filename),
+    plot     = plot,
+    width    = width,
+    height   = height,
+    dpi      = dpi,
+    bg       = "white"
+  )
+  message("Saved: ", filename)
+}
+
+# ── Create output directory if needed ───────────────────────
+if (!dir.exists("figures")) dir.create("figures")
+
+# ── Save each figure ────────────────────────────────────────
+save_fig(p_acc_lines + p_acc_rain +
+           plot_annotation(title = "Figure 1 · Accuracy"),
+         "fig1_accuracy.png",
+         width = 12, height = 5)
+
+save_fig(p_rt_lines + p_rt_rain +
+           plot_annotation(title = "Figure 2 · RT correct trials"),
+         "fig2_rt_correct.png",
+         width = 12, height = 6)
+
+save_fig(p_density,
+         "fig3_rt_density.png",
+         width = 12, height = 5)
+
+save_fig(p_tradeoff,
+         "fig4_tradeoff.png",
+         width = 9, height = 5)
+
+save_fig(p_timecourse,
+         "fig5_timecourse.png",
+         width = 12, height = 5)
+
+save_fig(p_heat_acc + p_heat_rt +
+           plot_annotation(title = "Figure 6 · Heatmaps"),
+         "fig6_heatmaps.png",
+         width = 12, height = 6)
+
+# ── Appendix figures ────────────────────────────────────────
+save_fig(p_caf,
+         "figA3_caf.png",
+         width = 9, height = 5)
+
+save_fig(p_delta,
+         "figA4_delta.png",
+         width = 9, height = 5)
+
+save_fig(p_ies_lines + p_ies_rain +
+           plot_annotation(title = "Figure F1 · IES"),
+         "figF1_ies.png",
+         width = 12, height = 5)
+
+save_fig(p_pes,
+         "figG1_pes.png",
+         width = 12, height = 5)
+
+# ── Publication figure (high resolution) ────────────────────
+pub_fig <- (pA | pB) / (pC | pD) +
+  plot_annotation(
+    title    = "Reaction Time Experiment — Summary",
+    subtitle = paste0("N = ", n_subj, " subjects | ",
+                      n_trials, " trials/condition"),
+    theme    = theme(
+      plot.title    = element_text(face = "bold", size = 16),
+      plot.subtitle = element_text(size = 11, colour = "grey40")
+    )
+  )
+
+save_fig(pub_fig,
+         "fig_publication.png",
+         width  = 14,
+         height = 12,
+         dpi    = 600)   # higher DPI for print
+
+# ── Also save as PDF (vector, ideal for journals) ───────────
+ggsave(
+  filename = file.path("figures", "fig_publication.pdf"),
+  plot     = pub_fig,
+  width    = 14,
+  height   = 12,
+  device   = cairo_pdf
+)
+
+message("All figures saved to ./figures/")
+```
+
+---
+
+# Appendix I · Reproducibility Checklist
+
+```{r reproducibility}
+# ── I.1  Confirm all key objects exist ──────────────────────
+required_objects <- c(
+  "sim_data",       # full dataset
+  "rt_correct",     # correct trials only
+  "acc_subj",       # subject x condition accuracy
+  "rt_subj",        # subject x condition median RT
+  "tradeoff_df",    # speed-accuracy trade-off data
+  "ies_df",         # inverse efficiency scores
+  "pes_df",         # post-error slowing data
+  "mod_acc",        # logistic GLMM (accuracy)
+  "mod_rt",         # LMM (RT, correct trials)
+  "mod_rt_corr"     # LMM (RT, correctness x condition)
+)
+
+check_df <- tibble(
+  Object  = required_objects,
+  Exists  = sapply(required_objects, exists),
+  Class   = sapply(required_objects, function(x)
+              if (exists(x)) class(get(x))[1] else NA_character_),
+  N_rows  = sapply(required_objects, function(x)
+              if (exists(x) && is.data.frame(get(x)))
+                nrow(get(x))
+              else NA_integer_)
+)
+
+check_df %>%
+  kbl(
+    caption   = "Table I1 · Reproducibility checklist",
+    col.names = c("Object", "Exists", "Class", "N rows"),
+    align     = c("l", "c", "l", "r")
+  ) %>%
+  kable_styling(
+    bootstrap_options = c("striped", "hover", "condensed"),
+    full_width        = FALSE
+  ) %>%
+  row_spec(
+    which(!check_df$Exists),
+    background = "#fff0f0",
+    color      = "red"
+  ) %>%
+  row_spec(
+    which(check_df$Exists),
+    background = "#f0fff0"
+  )
+
+# ── I.2  Dataset snapshot ────────────────────────────────────
+cat("\n=== Dataset snapshot ===\n")
+cat(sprintf("  Total rows          : %d\n",  nrow(sim_data)))
+cat(sprintf("  Subjects            : %d\n",  n_distinct(sim_data$Subject)))
+cat(sprintf("  Conditions          : %d (%s)\n",
+            n_distinct(sim_data$Condition),
+            paste(levels(sim_data$Condition), collapse = ", ")))
+cat(sprintf("  Trials per cell     : %d\n",  n_trials))
+cat(sprintf("  Overall accuracy    : %.1f%%\n",
+            mean(sim_data$Correct) * 100))
+cat(sprintf("  Mean RT (all)       : %.1f ms\n", mean(sim_data$RT)))
+cat(sprintf("  Mean RT (correct)   : %.1f ms\n",
+            mean(sim_data$RT[sim_data$Correct == 1])))
+cat(sprintf("  Mean RT (incorrect) : %.1f ms\n",
+            mean(sim_data$RT[sim_data$Correct == 0])))
+cat(sprintf("  RT difference       : %.1f ms (incorrect - correct)\n",
+            mean(sim_data$RT[sim_data$Correct == 0]) -
+            mean(sim_data$RT[sim_data$Correct == 1])))
+```
+
+
+---
+
+# Appendix J · Session Info
+
+```{r session-info2}
+sessionInfo()
+```
+````
+
+---
+
+## Complete Document Map
+
+```
+EDA — Reaction Time Experiment
+│
+├── §1  Libraries & seed
+├── §2  Data simulation
+│     ├── 24 subjects, within-subject
+│     ├── 2 conditions (Easy / Hard)
+│     ├── 40 trials × subject × condition
+│     ├── Accuracy: p(correct) = 0.88 / 0.68
+│     └── RT: log-normal, incorrect ~60 ms slower
+│
+├── §3  Descriptive statistics (Tables 1-2)
+│
+├── §4  Visualisation
+│     ├── 4.1  Accuracy: trajectories + raincloud      [PRIMARY]
+│     ├── 4.2  RT correct: trajectories + raincloud    [PRIMARY]
+│     ├── 4.3  RT density: correct vs incorrect        [SECONDARY]
+│     ├── 4.4  Speed-accuracy trade-off scatter
+│     ├── 4.5  Trial-by-trial LOESS time course
+│     └── 4.6  Subject x condition heatmaps
+│
+├── §5  Mixed models
+│     ├── GLMM: accuracy ~ Condition + (1|Subject)
+│     ├── LMM:  log(RT) ~ Condition + (1|Subject)  [correct only]
+│     └── LMM:  log(RT) ~ Condition x Correctness + (1|Subject)
+│
+├── §6  Dashboard (patchwork, all key plots)
+│
+├── Appendix A  Per-subject RT densities + Q-Q plots
+├── Appendix B  Reporting-ready summary table
+├── Appendix C  Effect sizes (Cohen's d)
+├── Appendix D  Paired t-tests (descriptive)
+├── Appendix E  Publication-ready 2x2 figure
+├── Appendix F  Inverse Efficiency Score (IES)
+├── Appendix G  Post-error slowing (PES)
+├── Appendix H  Save all figures
+├── Appendix I  Reproducibility checklist
+└── Appendix J  Session info
+```

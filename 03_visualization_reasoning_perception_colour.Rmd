@@ -1,0 +1,883 @@
+---
+title: 'Visualization as Statistical Reasoning: Perception, Design, and Colour'
+author: "Livio Finos, University of Padova"
+subtitle: A Course on Data Visualization
+output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    self_contained: true
+    fig_caption: true
+params:
+  show_solutions: true
+---
+
+
+```{r setup, include=FALSE}
+required <- c("ggplot2", "patchwork", "viridisLite", "colorspace", "knitr", "dplyr", "tibble")
+missing <- required[!vapply(required, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing)) {
+  stop("Install missing packages first: install.packages(c(",
+       paste(sprintf('"%s"', missing), collapse = ", "), "))")
+}
+library(ggplot2)
+library(patchwork)
+library(dplyr)
+library(tibble)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
+                     fig.width = 9, fig.height = 5, dpi = 120,
+                     fig.align = "center")
+theme_set(theme_minimal(base_size = 12))
+options(width = 90)
+set.seed(20260917)
+```
+
+# How to use this unit
+
+<!-- The aim of this unit is to treat a plot as a **statistical argument**: a set of choices about data, scale, geometry, aggregation, and annotation that determines what the reader can see and which claims appear plausible. -->
+
+<!-- **Prerequisites.** Basic R, descriptive statistics, correlation, and an introductory understanding of linear regression. If you have not yet studied regression, you can return to the residuals-and-leverage extension later. -->
+
+<!-- **Learning outcomes.** By the end of this unit, you should be able to: -->
+
+<!-- 1. identify the statistical question and intended comparison behind a graph; -->
+<!-- 2. distinguish exploration from explanation, and observations from fitted summaries; -->
+<!-- 3. explain why numerical summaries can conceal different data structures; -->
+<!-- 4. investigate unusual observations and distinguish association from causation; -->
+<!-- 5. choose visual channels, geometries, and scales suited to the task; -->
+<!-- 6. simplify a graph while retaining useful context; -->
+<!-- 7. choose qualitative, sequential, and diverging palettes and assess accessibility; -->
+<!-- 8. produce a reproducible graphic and justify its design choices. -->
+
+<!-- **Suggested study route.** You can work through this unit over several sessions: approximately 90 minutes on statistical reasoning and exploration, 75 minutes on perception and design, and 60 minutes on colour and accessibility. Allow a further 45–60 minutes for selected activities, and use the remaining exercises for additional practice. -->
+
+<!-- All examples use datasets supplied with R or explicitly constructed teaching data. No external data downloads are required. Explanations and examples are teaching material; linked readings provide background. -->
+
+## Preparation and rendering
+
+Run once in the R console:
+
+```{r install, eval=FALSE}
+install.packages(c("rmarkdown", "knitr", "ggplot2", "patchwork",
+                   "viridisLite", "colorspace", "dplyr", "tibble"))
+```
+
+Use R 4.1 or later for the native pipe `|>`. Open the file in RStudio and select **Knit**, or run:
+
+```{r render, eval=FALSE}
+rmarkdown::render("01_visualization_reasoning_perception_colour.Rmd")
+# Omit the optional answer section; worked examples remain visible.
+rmarkdown::render("01_visualization_reasoning_perception_colour.Rmd",
+                  params = list(show_solutions = FALSE),
+                  output_file = "01_visualization_reasoning_perception_colour_student.html")
+```
+
+Rendering requires Pandoc, normally supplied by RStudio. HTML is the intended output. When preparing your own graphics, include written interpretations and accessible data tables when exact values matter.
+
+## Where to read in Wilke
+
+| Topic | Specific reading in *Fundamentals of Data Visualization* | Role in this module |
+|:--|:--|:--|
+| Data–ink ratio | [Chapter 23, especially §23.1–23.2: Balance the data and the context](https://clauswilke.com/dataviz/balance-data-context.html) | Direct discussion of Tufte and the limits of removing context |
+| Visual channels | [Chapter 2, §2.1–2.2: Mapping data onto aesthetics](https://clauswilke.com/dataviz/aesthetic-mapping.html) | Terminology for mappings; supplemented by Cleveland and McGill |
+| Distorted magnitudes | [Chapter 17: The principle of proportional ink](https://clauswilke.com/dataviz/proportional-ink.html) | Related principle, distinct from maximizing data–ink |
+| Palette type | [Chapter 4, §4.1–4.3: Color scales](https://clauswilke.com/dataviz/color-basics.html) | Qualitative, sequential, diverging, and highlighting uses |
+| Colour mistakes and accessibility | [Chapter 19, §19.1–19.3: Common pitfalls of color use](https://clauswilke.com/dataviz/color-pitfalls.html) | Unnecessary colour, non-monotonic scales, colour-vision deficiency |
+| Anscombe’s quartet | Supplement: [Anscombe (1973)](https://www.sjsu.edu/faculty/gerstman/StatPrimer//anscombe1973.pdf) | Primary reading; no specific Wilke section is claimed here |
+| Perceptual accuracy | Supplement: [Cleveland and McGill (1984)](https://faculty.washington.edu/aragon/classes/hcde411/w13/readings/cleveland84.pdf) | Primary source for elementary perceptual tasks |
+
+# A graph is a statistical tool
+
+A useful starting point is to ask **what information a graph makes easy to compare**. A graph maps variables to visual properties (aesthetics) such as position, length, size, shape or colour. These choices are not neutral.
+
+For example, position along a common scale is usually easier to compare accurately than angles or areas. This is one reason a dot plot or bar chart can be preferable to a pie chart when the goal is to compare quantities.
+
+A graph can help us discover:
+
+- location and spread;
+- clusters and gaps;
+- trends and nonlinear relationships;
+- unusual observations;
+- differences between groups;
+- possible data-quality problems.
+
+But a graph **does not by itself establish** a sampling design, statistical uncertainty, or a causal mechanism.
+
+## A three-step reading strategy
+
+When looking at a graph, use the following order:
+
+1. **Describe:** What marks, scales and groups are visible? Avoid explanations.
+2. **Compare:** Where are the differences in centre, spread, shape or association?
+3. **Interpret:** What statistical or substantive explanation is compatible with what we see?
+
+This separation prevents a common mistake: jumping from a visual pattern directly to a causal story.
+
+# Anscombe’s quartet: what summaries cannot tell you
+
+## Predict before plotting
+
+A graph can reveal information that a mean, variance, or correlation discards. Anscombe’s quartet demonstrates this loss of information; it is not itself an optical illusion or a test of perceptual accuracy.
+
+```{r anscombe-data}
+a <- do.call(rbind, lapply(1:4, function(i) {
+  data.frame(set = factor(paste("Set", i), levels = paste("Set", 1:4)),
+             observation = seq_len(nrow(anscombe)),
+             x = anscombe[[paste0("x", i)]],
+             y = anscombe[[paste0("y", i)]])
+}))
+summary_table <- do.call(rbind, lapply(split(a, a$set), function(d) {
+  fit <- lm(y ~ x, data = d)
+  data.frame(n = nrow(d), mean_x = mean(d$x), mean_y = mean(d$y),
+             var_x = var(d$x), var_y = var(d$y), r = cor(d$x, d$y),
+             intercept = unname(coef(fit)[1]), slope = unname(coef(fit)[2]),
+             R_squared = summary(fit)$r.squared)
+}))
+knitr::kable(summary_table, digits = 3,
+             caption = "Sample variances use the denominator n - 1.")
+```
+
+The summaries are approximately equal, allowing for rounding of the original observations. Before plotting, sketch what you think each dataset could look like. Does a correlation near 0.82 establish a linear relationship?
+
+```{r quartet, fig.height=6, fig.cap="Anscombe’s quartet, with identical axis limits and separate least-squares fits.", fig.alt="Set one has roughly linear scatter, set two a curved pattern, set three an outlier away from a line, and set four nearly constant x except for one point."}
+ggplot(a, aes(x, y)) +
+  geom_point(size = 2.5, colour = "#0072B2") +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+              colour = "#D55E00", linewidth = .7) +
+  facet_wrap(~set, ncol = 2) +
+  coord_cartesian(xlim = c(3, 20), ylim = c(2, 14)) +
+  labs(x = "x", y = "y")
+```
+
+## Read the four structures
+
+- **Set 1:** scatter broadly compatible with a linear trend; compatibility is not proof of all model assumptions.
+- **Set 2:** systematic curvature; the straight line misses the shape of the conditional mean.
+- **Set 3:** most observations follow a tight line, with one conspicuous departure that changes the fit.
+- **Set 4:** ten observations share the same x value; one point at a different x supplies all the predictor variation needed to estimate a slope.
+
+These descriptions concern the displayed data. They do not justify causal conclusions or automatic deletion of unusual observations. Investigate measurement, sampling, and the scientific question first.
+
+## Optional regression extension: residuals and leverage
+
+```{r diagnostics, fig.height=5, fig.cap="Residuals expose curvature and unusual departures hidden by the common summaries.", fig.alt="Residuals plotted against x separately for each dataset, with a zero reference line."}
+a_diag <- do.call(rbind, lapply(split(a, a$set), function(d) {
+  fit <- lm(y ~ x, data = d)
+  d$residual <- residuals(fit)
+  d$leverage <- hatvalues(fit)
+  d
+}))
+ggplot(a_diag, aes(x, residual)) + geom_hline(yintercept = 0, colour = "grey60") +
+  geom_point(size = 2) + facet_wrap(~set) +
+  labs(y = "Observed y - fitted y")
+```
+
+For simple regression with an intercept,
+
+\[
+h_{ii}=\frac{1}{n}+\frac{(x_i-\bar{x})^2}{\sum_j(x_j-\bar{x})^2}.
+\]
+
+The isolated x value in Set 4 has leverage one. Its fitted residual is zero even though it determines the slope: a small residual does not imply an unimportant observation.
+
+```{r leverage}
+d4 <- subset(a_diag, set == "Set 4")
+knitr::kable(d4[, c("observation", "x", "y", "residual", "leverage")], digits = 3)
+# If this observation is omitted, all remaining x values are equal.
+isolated <- which.max(d4$x)
+fit_without <- lm(y ~ x, data = d4[-isolated, ])
+coef(fit_without)  # slope is NA: it is no longer identifiable
+```
+
+
+## Reflection and discussion
+
+Consider the following questions individually, then compare your answers with a partner:
+
+1. Looking only at the numerical summaries, would you expect the four datasets to look so different?
+2. In which sets is correlation a poor description of the visible structure, and why?
+3. Is an unusual point necessarily a data error?
+4. What information would you need before deciding whether to remove it?
+
+# Outliers: detect first, explain second
+
+An unusual observation is a statistical signal, not automatically a mistake. Possible explanations include:
+
+- a recording or coding error;
+- a measurement problem;
+- a genuinely rare observation;
+- a member of a different population.
+
+A useful workflow is:
+
+1. identify the observation;
+2. check the raw data and measurement process;
+3. investigate whether it belongs to the target population;
+4. assess its influence on the intended analysis;
+5. document any decision to retain, correct or exclude it.
+
+The phrase **“remove the outlier because it looks strange”** is not a statistical justification.
+
+# Exploratory versus explanatory graphics
+
+A useful distinction is between **exploratory** and **explanatory** graphics. The difference is not mainly aesthetic: it concerns the **purpose of the graph and the audience for whom it is produced**.
+
+An **exploratory graphic** is primarily a tool for the analyst. Its purpose is to help us ask questions about the data:
+
+- Is there a relationship between two variables?
+- Is the relationship approximately linear?
+- Are there clusters or subgroups?
+- Are there unusual observations?
+- Does the relationship change across groups?
+- Would a transformation of one of the variables reveal additional structure?
+
+At this stage, it is perfectly reasonable to produce many graphs, try alternative scales, add smoothers, facet by different variables, or inspect individual observations. Some of these graphs may never appear in the final report. Their role is to support **statistical discovery** rather than communication.
+
+An **explanatory graphic**, in contrast, is designed for an audience. By the time we construct it, we usually have a clearer idea of which feature of the data matters. The purpose is no longer simply to discover patterns, but to make an important comparison or result easy to see.
+
+The same dataset may therefore generate many exploratory graphics but only one or two explanatory graphics.
+
+A useful way to think about the distinction is:
+
+> **Exploration asks: "What can I learn from these data?"**  
+> **Explanation asks: "What should my audience notice in these data?"**
+
+Importantly, explanatory graphics should not hide relevant complexity or uncertainty. Simplification means removing visual elements that are not useful for the intended comparison, not removing observations or evidence that contradicts the desired message.
+
+## An exploratory view
+
+Suppose we are interested in the relationship between automobile weight and fuel economy. We might begin with a simple scatterplot and a fitted linear trend.
+
+```{r exploration}
+cars <- mtcars |> 
+  as_tibble(rownames = "car")
+
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Exploring the relationship between weight and fuel economy",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon"
+  )
+```
+
+At this stage, the graph is a tool for asking questions. The negative association is immediately visible, but we should not stop at the fitted line.
+
+For example, we might ask whether the relationship differs according to the number of cylinders:
+
+```{r exploration-groups}
+cars |>
+  mutate(cyl = factor(cyl)) |>
+  ggplot(aes(wt, mpg, colour = cyl)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Does the relationship differ by cylinder count?",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon",
+    colour = "Cylinders"
+  )
+```
+
+Or we could separate the groups into panels:
+
+```{r exploration-facets}
+cars |>
+  mutate(cyl = factor(cyl)) |>
+  ggplot(aes(wt, mpg)) +
+  geom_point(size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  facet_wrap(~ cyl) +
+  labs(
+    title = "Weight and fuel economy within cylinder groups",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon"
+  )
+```
+
+These different views answer slightly different questions. The first emphasises the overall relationship, while the second and third encourage us to consider whether part of that relationship might reflect differences between groups.
+
+This is an important feature of exploratory analysis: **one graph often leads to another question and therefore to another graph**.
+
+## The fitted line is a statistical summary
+
+The fitted regression line summarises the relationship between `wt` and `mpg`. It helps us see the overall direction and strength of the linear association.
+
+However, the line should not be confused with the data themselves. Individual observations may lie far from it, and a fitted line may hide nonlinear patterns, clusters, or influential observations.
+
+Moreover, the fitted relationship is **associational**. From this graph alone we cannot conclude that changing the weight of a car would cause a corresponding change in fuel economy. Other characteristics, such as engine size, number of cylinders, vehicle design, and transmission type, may be related to both variables.
+
+Thus a smoother or regression line is a **model-based visual summary**, not a causal statement.
+
+## Moving from exploration to explanation
+
+After exploring the data, suppose we decide that the main message we want to communicate is:
+
+> **Heavier cars tend to have lower fuel economy.**
+
+An explanatory graphic can make this comparison more explicit.
+
+```{r explanatory}
+selected_cars <- cars |>
+  filter(
+    car %in% c(
+      "Toyota Corolla",
+      "Cadillac Fleetwood",
+      "Ferrari Dino"
+    )
+  )
+
+ggplot(cars, aes(wt, mpg)) +
+  geom_point(alpha = 0.45, size = 3) +
+  geom_smooth(method = "lm", se = FALSE) +
+  geom_text(
+    data = selected_cars,
+    aes(label = car),
+    nudge_y = 1.5,
+    check_overlap = TRUE
+  ) +
+  labs(
+    title = "Heavier cars tend to have lower fuel economy",
+    subtitle = "The fitted line summarises an association, not a causal effect",
+    x = "Weight (1000 lb)",
+    y = "Miles per gallon",
+    caption = "Data: mtcars"
+  )
+```
+
+Notice how the role of the title has changed. In the exploratory graph the title describes what we are investigating:
+
+> *Exploring the relationship between weight and fuel economy.*
+
+In the explanatory graph the title communicates the principal finding:
+
+> *Heavier cars tend to have lower fuel economy.*
+
+A few observations are labelled because they provide useful reference points. Labelling every car would make the display harder to read and would distract from the main comparison.
+
+This illustrates an important principle of explanatory visualisation:
+
+> **Emphasise what matters, de-emphasise what does not, but do not distort the evidence.**
+
+## Exploration is usually iterative
+
+Exploratory visualisation rarely follows a straight path. A realistic workflow might look like this:
+
+**question → graph → unexpected feature → new question → new graph**
+
+For example:
+
+1. Plot `wt` against `mpg`.
+2. Notice a negative relationship.
+3. Notice that cars seem to form groups.
+4. Colour observations according to `cyl`.
+5. Ask whether the apparent weight–mpg relationship is partly explained by cylinder count.
+6. Facet the graph and compare within groups.
+7. Fit or consider a more appropriate statistical model.
+
+Graphs therefore participate directly in statistical reasoning. They are not simply illustrations produced after the analysis has been completed.
+
+## Different criteria for success
+
+Because exploratory and explanatory graphics have different purposes, they can also be judged by somewhat different criteria.
+
+An exploratory graph is useful if it helps the analyst:
+
+- discover unexpected structure;
+- generate statistical questions;
+- detect possible errors or unusual observations;
+- compare alternative representations;
+- decide what analysis should come next.
+
+An explanatory graph is useful if it helps the reader:
+
+- identify the intended comparison quickly;
+- understand what variables and populations are involved;
+- distinguish observations from statistical summaries;
+- recognise relevant uncertainty or limitations;
+- avoid conclusions that are stronger than the evidence supports.
+
+A graph can therefore be excellent for exploration but poor for presentation. A dense matrix of twenty plots may be extremely useful to an analyst investigating a dataset, but inappropriate in a report whose audience needs to understand one particular result.
+
+Conversely, a highly simplified explanatory graphic may be ideal for communication but insufficient for diagnosing whether the underlying statistical model is appropriate.
+
+The two types of graphics are therefore complementary rather than competing:
+
+> **Explore broadly; explain selectively.**
+
+# Association is not causation
+
+A scatterplot can show association. It cannot, by itself, demonstrate causality.
+
+```{r association}
+ggplot(mtcars, aes(hp, mpg)) +
+  geom_point(size = 3) +
+  labs(
+    title = "Horsepower and fuel economy are negatively associated",
+    subtitle = "The plot alone does not identify a causal effect",
+    x = "Horsepower",
+    y = "Miles per gallon"
+  )
+```
+
+Possible reasons for an association include:
+
+- a direct causal relationship;
+- reverse causality;
+- confounding;
+- selection effects;
+- a mixture of different populations.
+
+The distinction is particularly important when a graph is used to communicate results from observational data.
+
+# From graph to reproducible code
+
+A reproducible graphic records the data, mappings, geometric objects and transformations used to produce it.
+
+The basic `ggplot2` structure is:
+
+```r
+ggplot(data, aes(x = ..., y = ...)) +
+  geom_...
+```
+
+Think of the components as separate decisions:
+
+- **data:** Which observations are being displayed?
+- **aesthetics:** Which variables are mapped to which visual properties?
+- **geometry:** What visual marks represent the observations?
+- **scales:** How are values translated into positions/colours/etc.?
+- **facets:** Should groups be displayed separately?
+- **labels:** What should the reader know without guessing?
+
+# Visual encodings and misleading choices
+
+A visual encoding should support the comparison the reader needs to make. Common choices include:
+
+| Goal | Often useful | Potential problem |
+|---|---|---|
+| Compare quantities | position, length | truncated axes can exaggerate differences |
+| Show a distribution | histogram, density, boxplot | bin width/bandwidth changes the apparent shape |
+| Show a relationship | scatterplot | overplotting can hide observations |
+| Show a time trend | line plot | connecting unrelated observations can imply continuity |
+| Compare groups | aligned positions, facets | too many colours/categories reduce readability |
+
+## Axis limits and visual exaggeration
+
+A bar chart whose vertical axis does not start at zero can make differences in **length** appear much larger than they are. For points, however, forcing an axis to start at zero is not generally necessary: the important comparison is often the relative position of the observations.
+
+The statistical question should determine the scale, rather than a mechanical rule such as “every axis must start at zero.”
+
+```{r scale-example}
+comparison <- tibble(
+  group = c("A", "B", "C"),
+  estimate = c(72, 75, 77)
+)
+
+p_scale <- ggplot(comparison, aes(group, estimate)) +
+  geom_col(fill = "#0072B2") +
+  labs(x = "Group", y = "Estimated score")
+(p_scale + labs(title = "Bars from zero")) +
+  (p_scale + coord_cartesian(ylim = c(70, 79)) +
+     labs(title = "Truncated bars exaggerate ratios"))
+```
+
+Now compare the same information as points:
+
+```{r point-example}
+ggplot(comparison, aes(group, estimate)) +
+  geom_point(size = 4) +
+  coord_cartesian(ylim = c(70, 79)) +
+  labs(y = "Estimated score")
+```
+
+The truncated bar chart makes visible bar lengths proportional to distance above 70 rather than to the full scores. The dot plot can use this narrower range because position, rather than bar length from a baseline, carries the comparison. Keep axis labels visible and explain the scale; the geometry and scale should serve the intended question.
+
+# Graphical perception: choose a channel for the task
+
+## Elementary perceptual tasks
+
+A *channel* is a visual property that carries information, such as position, length, area, or colour. Wilke calls these properties aesthetics. Cleveland and McGill studied the elementary comparisons viewers make when decoding graphs.
+
+Their proposed ordering, from generally more accurate to less accurate quantitative judgments, can be summarised as follows:
+
+| Approximate tier | Task | Typical example |
+|:--|:--|:--|
+| 1 | Position along a common scale | Aligned dots; bar endpoints |
+| 2 | Position along identical but nonaligned scales | Separate panels requiring visual transfer |
+| 3 | Length, direction, angle | Floating bar segments; line orientation; pie slices |
+| 4 | Area | Bubble sizes |
+| 5 | Volume, curvature | Three-dimensional symbols; curve shape comparisons |
+| 6 | Shading or colour saturation | Magnitude inferred from shading |
+
+This is a qualitative guide, not a universal ranking with fixed error rates. The paper combines theory and selected experiments; it does not establish every pairwise comparison in every display. Task, separation, aspect ratio, and visual context matter. Unordered hue is useful for identifying categories, but has no intrinsic numerical order.
+
+## Same values, three encodings
+
+Estimate the value for C as a percentage of the value for E, first from each graph without consulting its legend. Then inspect the underlying values.
+
+```{r channels, fig.height=4.5, fig.cap="Position, area, and colour encode the same invented measurements.", fig.alt="Three panels encode five values using aligned dot positions, bubble areas, and tile colours."}
+measure <- data.frame(group = LETTERS[1:5], value = c(20, 35, 46, 63, 80))
+pos <- ggplot(measure, aes(value, group)) + geom_point(size = 3) +
+  scale_x_continuous(limits = c(0, 90)) + labs(title = "Position", x = "Value", y = NULL)
+area <- ggplot(measure, aes(1, group, size = value)) +
+  geom_point(colour = "#0072B2") + scale_size_area(max_size = 16, limits = c(0, 90)) +
+  scale_x_continuous(breaks = NULL) + labs(title = "Area", x = NULL, y = NULL) +
+  theme(legend.position = "none", panel.grid = element_blank())
+col <- ggplot(measure, aes(1, group, fill = value)) + geom_tile(width = .7, height = .7) +
+  scale_fill_viridis_c(limits = c(0, 90), end = .9) +
+  scale_x_continuous(breaks = NULL) + labs(title = "Colour", x = NULL, y = NULL) +
+  theme(panel.grid = element_blank(), legend.position = "bottom")
+pos + area + col
+```
+
+```{r channel-answer}
+100 * measure$value[measure$group == "C"] / measure$value[measure$group == "E"]
+```
+
+The correct answer is 57.5%. These displays illustrate the comparison; they do not replicate the 1984 experiment: the axes and legends provide different reference information. A controlled study would also standardise those aids, randomise trials, and collect repeated judgments.
+
+For precise comparisons, start by considering position. Area or colour can still be useful when position is already occupied by other variables, such as spatial coordinates in a map.
+
+## Why stacked segments can be harder to compare
+
+```{r stacked, fig.height=4, fig.cap="The target segment has no common baseline in the stacked chart; the dot chart aligns target counts.", fig.alt="Stacked bars contain target counts 30, 35, 32, and 34 on unequal baselines. An adjacent dot chart aligns these counts on one scale."}
+segments <- data.frame(group = rep(LETTERS[1:4], each = 2),
+                       part = rep(c("Base", "Target"), 4),
+                       count = c(20, 30, 60, 35, 35, 32, 50, 34))
+segments$part <- factor(segments$part, levels = c("Base", "Target"))
+p_stack <- ggplot(segments, aes(group, count, fill = part)) +
+  geom_col(position = position_stack(reverse = TRUE), width = .6) +
+  scale_fill_manual(values = c(Base = "grey80", Target = "#0072B2")) +
+  labs(title = "Compare the blue segments", y = "Count", x = NULL)
+p_target <- ggplot(subset(segments, part == "Target"), aes(count, group)) +
+  geom_point(size = 3, colour = "#0072B2") +
+  scale_x_continuous(limits = c(0, 40)) +
+  labs(title = "Compare aligned positions", x = "Target count", y = NULL)
+p_stack + p_target
+```
+
+The stacked version answers a composition question and preserves totals. The dot chart answers a question specifically about Target. Do not declare one universally superior: identify what the reader needs to compare.
+
+## A genuine encoding error: radius versus area
+
+If the radius doubles, the area increases by a factor of four. To encode values 10 and 40 by circle area, use a radius ratio of two, not four:
+
+\[
+A=\pi r^2,\qquad A\propto v\ \Longrightarrow\ r\propto\sqrt{v}.
+\]
+
+```{r circle-scaling, fig.height=3.5, fig.cap="A fourfold change in value should produce a fourfold area change, not a sixteenfold area change.", fig.alt="Two pairs of circles represent values 10 and 40. Correct area scaling gives a radius ratio of two; incorrect radius scaling gives a radius ratio of four."}
+# Explicit polygon geometry avoids ambiguities about point-size conventions.
+circle_data <- function(correct) {
+  do.call(rbind, lapply(1:2, function(i) {
+    v <- c(10, 40)[i]
+    r <- if (correct) .8 * sqrt(v / 40) else .8 * v / 40
+    theta <- seq(0, 2*pi, length.out = 200)
+    data.frame(x = 2*i + r*cos(theta), y = r*sin(theta), id = factor(v),
+               method = if (correct) "Area proportional to value" else "Radius proportional to value")
+  }))
+}
+circles <- rbind(circle_data(TRUE), circle_data(FALSE))
+ggplot(circles, aes(x, y, group = id)) +
+  geom_polygon(fill = "#56B4E9", colour = "#0072B2") +
+  facet_wrap(~method) + coord_equal(xlim = c(1, 5), ylim = c(-1, 1)) +
+  scale_x_continuous(breaks = c(2, 4), labels = c("Value: 10", "Value: 40")) +
+  labs(x = NULL, y = NULL) +
+  theme(panel.grid = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.y = element_blank())
+```
+
+# Data–ink: simplify without removing meaning
+
+## Principle and limits
+
+Tufte's data–ink ratio is conceptually
+
+\[
+\text{data–ink ratio}
+=\frac{\text{ink used for non-redundant representation of data}}
+       {\text{total ink in the graphic}}.
+\]
+
+Treat this as an editing principle, not as a numerical score to optimise by counting pixels. A thick border may attract attention without helping interpretation; an axis label uses ink but identifies the measured quantity. The decision is whether an element serves the reader's task.
+
+Wilke's Chapter 23 emphasises retaining enough context: removing all reference marks can make comparisons harder. Keep readable units, meaningful reference lines, and a clear mapping from marks to variables. Non-data ink is not synonymous with useless ink.
+
+**A different principle:** proportional ink concerns whether the size of a mark faithfully represents magnitude. For circles with area proportional to a value \(v\), the radius must be proportional to \(\sqrt{v}\). This is different from deciding how much decoration to remove.
+
+## Example: three versions of the same data
+
+The following invented counts represent students attending six optional workshops. Before reading the code, consider these questions: *Which plot lets you read the attendance at workshop D? Which lets you identify the largest attendance?*
+
+```{r data-ink, fig.height=4, fig.cap="Identical counts with excessive decoration, useful context, and insufficient context.", fig.alt="Three bar charts of the same six workshop counts. The middle chart keeps labels and light reference lines; the last removes the information needed to identify values."}
+attendance <- data.frame(workshop = LETTERS[1:6],
+                         students = c(24, 37, 29, 43, 34, 19))
+p <- ggplot(attendance, aes(workshop, students)) +
+  geom_col(fill = "#0072B2", width = .65) +
+  scale_y_continuous(limits = c(0, 50), breaks = seq(0, 50, 10),
+                     expand = expansion(mult = c(0, .02))) +
+  labs(x = "Workshop", y = "Number of students")
+clutter <- p + labs(title = "Too much decoration") +
+  theme(panel.background = element_rect(fill = "grey85"),
+        panel.grid.major = element_line(colour = "grey35", linewidth = .8),
+        panel.grid.minor = element_line(colour = "grey55", linewidth = .5),
+        panel.border = element_rect(fill = NA, colour = "black", linewidth = 1.5),
+        plot.background = element_rect(fill = "grey95", colour = "black"))
+balanced <- p + labs(title = "Useful context") +
+  theme(panel.grid.major.x = element_blank(), panel.grid.minor = element_blank())
+empty <- p + theme_void(base_size = 12) + labs(title = "Too little context")
+clutter + balanced + empty + plot_layout(nrow = 1)
+```
+
+**Interpretation.** The last version still allows rough ranking, but the question about workshop D cannot be answered without labels. Adding direct values could help precise lookup; it would also introduce more ink. The task, rather than maximal simplicity, determines the choice.
+
+# Colour theory for statistical graphics
+
+## Hue, chroma, and lightness
+
+**Hue** describes a colour family, such as blue or orange. **Chroma** describes departure from a neutral grey at a given lightness. **Lightness** describes how light or dark a colour appears relative to a reference white. Saturation is related to chroma but is not an interchangeable technical quantity across colour models.
+
+RGB specifies display primaries; equal numerical RGB steps need not look equally different. Perceptual colour spaces are designed to better approximate visual differences. Even then, colour appearance depends on surrounding colours, mark size, display, and viewing conditions. A tiny pale point can disappear on white although the same colour works in a large tile.
+
+## Match the palette to the variable
+
+| Variable or task | Palette | Example | Common mistake |
+|:--|:--|:--|:--|
+| Unordered categories | Qualitative | Species; study programme | Suggesting a rank with light-to-dark colours |
+| Ordered magnitude | Sequential | Counts; density; elevation | A rainbow with no clear lightness order |
+| Deviation around a reference | Diverging | Residuals around zero | A sequential palette that hides the reference |
+| Emphasis | Neutral colours plus an accent | One selected group | Giving every item equal visual emphasis |
+
+For diverging data, choose the midpoint from the scientific meaning, not automatically from the sample mean. For a signed effect, zero often has meaning. For differences across panels, preserve common scale limits.
+
+## Smooth data, artificial colour boundaries
+
+The data below increase uniformly from left to right and do not change vertically. Any apparent bands beyond this smooth gradient come from the encoding or display.
+
+```{r smooth-field, fig.height=4, fig.cap="A mathematically smooth field displayed with rainbow and viridis palettes.", fig.alt="Two rectangular heatmaps of the same linear gradient, one using rainbow and one viridis."}
+field <- expand.grid(x = seq(0, 1, length.out = 200), y = seq(0, 1, length.out = 30))
+field$value <- field$x
+base_field <- ggplot(field, aes(x, y, fill = value)) + geom_raster() +
+  scale_y_continuous(breaks = NULL) + labs(x = "x", y = NULL, fill = "Value") +
+  theme(panel.grid = element_blank(), legend.position = "bottom")
+rainbow_plot <- base_field +
+  scale_fill_gradientn(colours = rainbow(256), limits = c(0, 1)) + labs(title = "Rainbow")
+viridis_plot <- base_field +
+  scale_fill_viridis_c(limits = c(0, 1)) + labs(title = "Viridis")
+rainbow_plot + viridis_plot
+```
+
+## Viridis: a useful sequential default
+
+Viridis and several related palettes are designed for approximately uniform perceptual progression and useful lightness ordering. They are practical choices for ordered numeric data, including under common colour-vision deficiencies. This is not a guarantee that any plot using them is accessible: mark size, contrast, scale limits, and non-colour cues still matter. Nor should every option offered by a palette package be assumed to share identical perceptual properties.
+
+```{r palette-strips, fig.height=3, fig.cap="Four sequential palettes with different hues but an ordered progression.", fig.alt="Colour strips for viridis, magma, inferno, and cividis, increasing from value zero to one."}
+palette_names <- c("viridis", "magma", "inferno", "cividis")
+strips <- do.call(rbind, lapply(palette_names, function(nm) {
+  data.frame(value = seq(0, 1, length.out = 100), palette = nm,
+             colour = viridisLite::viridis(100, option = nm))
+}))
+ggplot(strips, aes(value, palette, fill = colour)) + geom_tile() +
+  scale_fill_identity() + labs(x = "Normalised value", y = NULL) +
+  theme(panel.grid = element_blank())
+```
+
+In ggplot2, use `_c` for continuous scales, `_d` for discrete scales, and `_b` for binned numeric scales. A discrete scale does not imply that the selected colours are ideal for unordered groups; a lightness sequence can still suggest an order.
+
+```{r viridis-scatter, fig.cap="Position represents engine displacement and fuel economy; colour adds horsepower.", fig.alt="Scatter plot of mtcars fuel economy against engine displacement, with horsepower encoded by viridis colour."}
+ggplot(mtcars, aes(disp, mpg, colour = hp)) + geom_point(size = 3) +
+  scale_colour_viridis_c(option = "viridis", end = .9) +
+  labs(x = "Engine displacement (cubic inches)",
+       y = "Fuel economy (US miles per gallon)", colour = "Horsepower")
+```
+
+Here position supports reading the main relationship; colour adds a third variable. The plot uses historical cars from R's `mtcars` dataset and is not representative of today's car market.
+
+## Sequential versus diverging: a meaningful zero
+
+```{r diverging, fig.height=4, fig.cap="Signed deviations use a diverging scale centred at zero.", fig.alt="A grid of invented deviations from minus three to plus three, coloured blue for negative and orange for positive values."}
+deviation <- expand.grid(row = factor(LETTERS[1:4]), column = factor(1:5))
+deviation$effect <- rep(c(-3, -1.5, 0, 1.5, 3), each = 4)
+ggplot(deviation, aes(column, row, fill = effect)) + geom_tile(colour = "white") +
+  geom_text(aes(label = effect), colour = "black", size = 4) +
+  scale_fill_gradient2(low = "#91BFDB", mid = "#F7F7F7", high = "#F4A582",
+                       midpoint = 0, limits = c(-3, 3)) +
+  labs(x = "Condition", y = "Group", fill = "Deviation") + coord_equal() +
+  theme(panel.grid = element_blank())
+```
+
+The numbers make sign and magnitude available without relying on colour. This small example permits labels; a large matrix would need another way to provide exact values.
+
+# Accessibility: check the complete graphic
+
+## Simulate colour-vision deficiency and grayscale
+
+The `colorspace` package provides transformations approximating different colour-vision deficiencies. A simulation is a diagnostic aid, not a complete model of every person's experience. Grayscale is a separate check: colour-vision deficiency does not generally mean seeing only grey.
+
+```{r accessibility-palettes, fig.height=5, fig.cap="Original, simulated colour-vision deficiency, and grayscale views of rainbow and viridis.", fig.alt="Rows compare each palette under original colour, deutan, protan, tritan, and grayscale transformations."}
+transformations <- list(
+  Original = identity,
+  Deutan = function(z) colorspace::deutan(z, severity = 1),
+  Protan = function(z) colorspace::protan(z, severity = 1),
+  Tritan = function(z) colorspace::tritan(z, severity = 1),
+  Grayscale = function(z) colorspace::desaturate(z)
+)
+palettes <- list(Rainbow = rainbow(100), Viridis = viridisLite::viridis(100))
+checks <- do.call(rbind, lapply(names(palettes), function(pn) {
+  do.call(rbind, lapply(names(transformations), function(tn) {
+    data.frame(value = seq(0, 1, length.out = 100), palette = pn,
+               view = tn, colour = transformations[[tn]](palettes[[pn]]))
+  }))
+}))
+checks$view <- factor(checks$view, levels = rev(names(transformations)))
+ggplot(checks, aes(value, view, fill = colour)) + geom_tile() +
+  facet_wrap(~palette, ncol = 1) + scale_fill_identity() +
+  labs(x = "Normalised value", y = NULL) + theme(panel.grid = element_blank())
+```
+
+Follow each row from left to right. Can you reliably infer increasing values? Which palette maintains a useful ordering after the transformation?
+
+## Do not rely on colour alone
+
+For unordered groups, combine a qualitative palette with shape, line type, or direct labels. The following invented trajectories deliberately combine colour and line type; endpoint labels further reduce legend lookup.
+
+```{r redundant-encoding, fig.cap="Group identity is carried by colour, line type, and direct labels.", fig.alt="Three labelled trajectories: group A increases, group B declines, and group C rises slightly. Different line types preserve identity without colour."}
+trajectories <- data.frame(time = rep(1:6, 3), group = rep(c("A", "B", "C"), each = 6),
+                           response = c(2, 3, 4, 5, 6, 7,
+                                        7, 6.8, 6.5, 6.2, 5.8, 5.4,
+                                        3.5, 3.7, 3.8, 4, 4.1, 4.2))
+qualitative <- c(A = "#0072B2", B = "#D55E00", C = "#009E73")
+ggplot(trajectories, aes(time, response, colour = group, linetype = group)) +
+  geom_line(linewidth = .9) +
+  geom_text(data = subset(trajectories, time == 6),
+            aes(label = group), hjust = -.7, show.legend = FALSE) +
+  scale_colour_manual(values = qualitative) +
+  scale_linetype_manual(values = c(A = "solid", B = "dashed", C = "dotdash")) +
+  scale_x_continuous(limits = c(1, 6.7), breaks = 1:6) +
+  labs(x = "Time (weeks)", y = "Response (arbitrary units)") +
+  theme(legend.position = "none")
+```
+
+Check the rendered figure at its intended display size. A dashed line needs sufficient length to reveal the dash pattern; a shape needs sufficient size to be identifiable. Accessibility also includes readable text, meaningful captions, alternative text, and an accessible table when exact values are needed.
+
+# Group activity — critique a public chart
+
+Work in a group of 3–4 and allow approximately 20 minutes for this activity.
+
+Choose a chart from a newspaper, website, report or social-media post. Do not spend time deciding whether the underlying scientific claim is true; focus first on the graphic as a statistical communication device.
+
+Answer:
+
+1. **Population:** Who or what do the observations represent?
+2. **Variables:** What is measured?
+3. **Encoding:** Which visual properties carry the quantitative information?
+4. **Comparison:** What does the reader naturally compare?
+5. **Scale:** Could the scale exaggerate, hide or distort a difference?
+6. **Uncertainty:** Is uncertainty relevant, and if so, is it shown?
+7. **Claim:** What conclusion does the graphic invite?
+8. **Redesign:** What is one concrete change that would improve it?
+
+Prepare a **60-second explanation** of your group’s redesign, linking your proposed change to the comparison the graph should support.
+
+
+
+# Individual exercise — design a statistical graphic
+
+Suppose a university collects data on students' study time and exam performance. The research question is:
+
+> “Is performance associated with the amount of time students report studying each week?”
+
+Write down your design before writing code.
+
+### Part A — Design
+
+Specify:
+
+- the observational unit;
+- the response variable;
+- the explanatory variable;
+- an appropriate geometry;
+- whether colour, facets or labels are needed;
+- one feature that you would deliberately avoid.
+
+### Part B — Code
+
+Using `mtcars` as a practice dataset, create a scatterplot answering the analogous question about `wt` and `mpg`.
+
+Your plot should include:
+
+- informative axis labels;
+- a question-oriented title;
+- points;
+- a fitted linear trend;
+- a sentence in your written interpretation explaining why the graph does not establish causality.
+
+```{r exercise-template, eval=FALSE}
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "...",
+    x = "...",
+    y = "..."
+  )
+```
+
+
+# References, further examples and further reading
+
+- Wilke, C. O. (2019). *Fundamentals of Data Visualization*. O'Reilly. [Online author manuscript](https://clauswilke.com/dataviz/). Specific chapter links are given at the reading map near the beginning of this unit.
+
+
+## Further examples
+
+Of particular interest (to me):
+
+<https://clauswilke.com/dataviz/coordinate-systems-axes.html#nonlinear-axes>
+
+<https://clauswilke.com/dataviz/visualizing-amounts.html>
+
+<https://clauswilke.com/dataviz/histograms-density-plots.html#visualizing-a-single-distribution>
+
+<https://clauswilke.com/dataviz/proportional-ink.html#visualizations-along-linear-axes>
+
+<https://clauswilke.com/dataviz/color-pitfalls.html>
+
+<https://clauswilke.com/dataviz/avoid-line-drawings.html>
+
+<https://clauswilke.com/dataviz/no-3d.html>
+
+
+## Further reading
+- Tufte, E. R. (2001; first edition 1983). *The Visual Display of Quantitative Information*, 2nd ed. Graphics Press. [Author's book page](https://www.edwardtufte.com/book/the-visual-display-of-quantitative-information/). The online page identifies the book; Wilke §23.1 provides the accessible discussion used here.
+- Anscombe, F. J. (1973). Graphs in statistical analysis. *The American Statistician*, **27**(1), 17–21. [Article PDF](https://www.sjsu.edu/faculty/gerstman/StatPrimer//anscombe1973.pdf).
+- Cleveland, W. S., & McGill, R. (1984). Graphical perception: Theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association*, **79**(387), 531–554. [Article PDF](https://faculty.washington.edu/aragon/classes/hcde411/w13/readings/cleveland84.pdf).
+- Garnier and contributors. [viridis documentation](https://sjmgarnier.github.io/viridis/). Palette implementation and links to the original palette developers.
+- ggplot2 authors. [Viridis colour scales](https://ggplot2.tidyverse.org/reference/scale_viridis.html). API documentation for continuous, discrete, and binned scales.
+- colorspace authors. [Colour-vision deficiency transformations](https://colorspace.r-forge.r-project.org/reference/simulate_cvd.html). See also local R help: `?colorspace::simulate_cvd`.
+
+# Reproducibility information
+
+The source file was structurally checked when prepared, but its R chunks were not executed in the preparation environment because R was unavailable. When you knit it, the following records your actual runtime and package versions.
+
+```{r session-info}
+sessionInfo()
+```
+
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

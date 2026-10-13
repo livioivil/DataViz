@@ -1,0 +1,537 @@
+---
+title: "Student activity 3: instructor solution"
+subtitle: "Worked analysis and teaching notes for boxplots_data.csv"
+author: "Livio Finos, University of Padova"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+---
+
+
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
+                     fig.width = 8, fig.height = 5, fig.align = "center",
+                     dpi = 120, comment = "#>")
+options(width = 90)
+# All executed examples use base R. Only knitr and rmarkdown are needed to knit.
+blue <- "#0072B2"
+orange <- "#D55E00"
+green <- "#009E73"
+purple <- "#CC79A7"
+
+# Use exactly the same hinges and fences as base R's boxplot().
+# Restrict this teaching helper to finite numeric data.
+bp_info <- function(z) {
+  stopifnot(is.numeric(z), length(z) >= 2L, all(is.finite(z)))
+  s <- boxplot.stats(z, coef = 1.5)$stats
+  spread <- s[4] - s[2]
+  lower <- s[2] - 1.5 * spread
+  upper <- s[4] + 1.5 * spread
+  list(stats = s, iqr = spread, lower = lower, upper = upper,
+       flag = z < lower | z > upper)
+}
+
+# Overlay observations, with jitter only along the categorical axis.
+# exclude_points reserves selected cases for a separate labelled point layer;
+# it does not exclude them from the boxplot summary or axis limits.
+# The explicit ylim preserves the full range when outline = FALSE.
+box_points <- function(z, main = "", ylab = "Value", col = blue,
+                       exclude_points = integer(0)) {
+  boxplot(z, outline = FALSE, ylim = range(z), xlim = c(0.6, 1.4),
+          xaxt = "n", ylab = ylab, main = main, col = "grey95",
+          border = "grey20", boxwex = 0.3, lwd=2)
+  keep <- !(seq_along(z) %in% exclude_points)
+  points(jitter(rep(1, sum(keep)), amount = 0.08), z[keep],
+         pch = 16, cex = 0.65, col = adjustcolor(col, alpha.f = 0.5))
+}
+```
+
+# Instructor use
+
+This document contains the worked solution to
+`06_student_activity3_boxplots.Rmd`. Distribute that activity and
+`data/boxplots_data.csv` to students. Keep this solution separate until
+the discussion or release it afterwards.
+
+Place this Rmd beside the student activity, with the CSV in their shared
+`data` subfolder. The analysis below imports that file, so both versions use
+the same observations. Knit with `knitr` and `rmarkdown`; all plots here use
+base R. Pandoc is required and is bundled with RStudio.
+
+The student activity uses a fictional sensor-calibration context: `x` is a
+reference input level and `y` is a sensor reading, in arbitrary units.
+Each row is one simulated calibration run. Row order is not a time sequence.
+The data-generation equation and intended roles of A, B and C below belong
+to the solution and are deliberately absent from the student handout.
+
+| Student task | Corresponding worked analysis |
+|:--|:--|
+| Step 1: inspect and plan | Import checks and dataset construction |
+| Step 2: response alone | First look: the marginal distribution of Y |
+| Step 3: add X | Second look: Y against X, with a fitted line |
+| Step 4: residuals | Third look: residuals |
+| Step 5: diagnostics | A bridge to influential observations |
+| Step 6: case deletion | Observe influence directly by leaving one case out |
+| Step 7: modified A | What happens if the same high-leverage point moves off the line? |
+
+Assess the connection between evidence and interpretation, not just the code.
+The report should retain all observations in its initial fit, identify cases
+by `id`, compare predictions on a common set of predictor values, and
+distinguish sensitivity analysis from a decision to delete measurements.
+
+# Add an explanatory variable: unusual compared with what?
+
+## Dataset construction and three informative cases
+
+Suppose $Y$ is a response and $X$ is a predictor. For most observations we
+simulate
+
+\[
+Y_i=10+3X_i+\varepsilon_i,\qquad
+\varepsilon_i\sim N(0,1.2^2),
+\]
+
+with $X$ values between 0 and 10. We then add three **deliberately constructed**
+cases. This is a teaching dataset, not a representative sample from a single
+uncontaminated model.
+
+| Case | $X$ | $Y$ | Intended role |
+|:--|--:|--:|:--|
+| A | 18 | 64 | Very large $Y$, exactly on the generating line; unusual $X$. |
+| B | 5 | 65 | Very large $Y$ even for its ordinary $X$. |
+| C | 1 | 30 | Ordinary-looking marginal $Y$, but much too large for its low $X$. |
+
+For now, conceal this table when presenting the first graph and ask students
+to identify cases using only the response.
+
+```{r}
+set.seed(8675309)
+background <- data.frame(id = sprintf("R%02d", 1:80),
+                         x = seq(0, 10, length.out = 80))
+background$y <- 10 + 3 * background$x + rnorm(80, sd = 1.2)
+special <- data.frame(id = c("A", "B", "C"),
+                      x = c(18, 5, 1)+runif(3), y = c(64, 65, 30)+runif(3))
+dat <- rbind(background, special)
+is_special <- dat$id %in% c("A", "B", "C")
+special_rows <- which(is_special)
+case_col <- c(A = blue, B = orange, C = green)
+write.csv(dat,file="data/boxplots_data.csv",row.names = FALSE)
+
+y_info <- bp_info(dat$y)
+dat$marginal_flag <- y_info$flag
+
+```
+
+
+```{r regression-data}
+data_path <- file.path("data", "boxplots_data.csv")
+if (!file.exists(data_path)) {
+  stop("Place boxplots_data.csv in the data folder next to this Rmd.")
+}
+dat_raw <- read.csv(data_path, stringsAsFactors = FALSE)
+stopifnot(identical(names(dat_raw), c("id", "x", "y")),
+          nrow(dat_raw) == 83L, !anyNA(dat_raw),
+          !anyDuplicated(dat_raw$id),
+          is.numeric(dat_raw$x), is.numeric(dat_raw$y),
+          all(is.finite(dat_raw$x)), all(is.finite(dat_raw$y)),
+          all(c("A", "B", "C") %in% dat_raw$id))
+dat <- dat_raw
+nrow(dat)
+summary(dat[c("x", "y")])
+is_special <- dat$id %in% c("A", "B", "C")
+special_rows <- match(c("A", "B", "C"), dat$id)
+case_col <- c(A = blue, B = orange, C = green)
+y_info <- bp_info(dat$y)
+dat$marginal_flag <- y_info$flag
+```
+
+## First look: the marginal distribution of Y
+
+```{r marginal-response, fig.height=5, fig.cap="A and B are marginally extreme responses; C lies within the central range of Y."}
+set.seed(4242)
+local({
+  par(mar = c(3, 4, 3, 1))
+  boxplot(dat$y, outline = FALSE, ylim = range(dat$y) + c(-3, 4),
+          xlim = c(0.65, 1.55), boxwex = 0.25, xaxt = "n",
+          ylab = "Response Y", col = "grey95", main = "Ignore X: inspect Y alone")
+  points(jitter(rep(1, sum(!is_special)), amount = 0.06), dat$y[!is_special],
+         pch = 16, cex = 0.65, col = adjustcolor("grey35", alpha.f = 0.6))
+  # Separate A and B horizontally so their nearby responses remain readable.
+  sx <- c(0.95, 1, 1.05)
+  points(sx, dat$y[special_rows], pch = 17, cex = 1.2, col = case_col)
+  text(sx, dat$y[special_rows], labels = dat$id[special_rows], pos = 3,
+       col = case_col, font = 2)
+  abline(h = y_info$upper, lty = 2, col = "grey45")
+  mtext("Dashed line: upper marginal fence", side = 1, line = 1, cex = 0.85)
+})
+```
+
+A and B are flagged, whereas C is not. But this view compares each response
+with *all* responses, regardless of its predictor value. It discards information
+that might explain why responses differ.
+
+## Second look: Y against X, with a fitted line
+
+Fit ordinary least squares using **all** observations, including A, B and C.
+We do not first remove the points we want to investigate.
+
+```{r fit-linear-model}
+fit <- lm(y ~ x, data = dat)
+coef(fit)
+dat$fitted <- fitted(fit)
+dat$residual <- resid(fit)
+```
+
+```{r response-against-predictor, fig.height=5.5, fig.cap="Vertical segments are residuals from the fitted line. The generating line is shown because it is known in this simulation."}
+local({
+  par(mar = c(4, 4, 3, 1))
+  plot(y ~ x, data = dat, pch = 16, col = "grey60",
+       xlim = c(-0.5, 20), ylim = c(5, 72),
+       xlab = "Predictor X", ylab = "Response Y",
+       main = "The predictor changes the interpretation")
+  abline(a = 10, b = 3, col = "grey55", lty = 2, lwd = 2)
+  abline(fit, col = "black", lwd = 2)
+  with(dat[special_rows, ], segments(x, fitted, x, y, col = case_col, lwd = 2))
+  points(dat$x[special_rows], dat$y[special_rows], pch = 17,
+         cex = 1.3, col = case_col)
+  text(dat$x[special_rows], dat$y[special_rows],
+       labels = dat$id[special_rows], pos = c(4, 3, 4), col = case_col, font = 2)
+  legend("topleft", c("Fitted to all observations", "Generating line: 10 + 3X"),
+         col = c("black", "grey55"), lty = c(1, 2), lwd = 2, bty = "n", cex = 0.8)
+})
+```
+
+- **A:** its high $Y$ is explained by its high $X$. It lies exactly on the
+  generating line and close to the fitted line. It is marginally extreme but
+  is not a large-residual case in this example.
+- **B:** its $Y$ remains unusual after accounting for $X$; its residual is large.
+- **C:** its $Y$ is not marginally extreme, but observations with $X=1$ should
+  have responses near 13 under the generating model. Its response of 30 is
+  therefore conditionally unusual.
+
+The fitted line need not equal the generating line: random errors and the
+inserted cases affect its coefficients. In real data, we do not know the
+true line and cannot establish model compatibility simply by drawing one.
+Also, A extends beyond the background range of $X$: accepting the linear
+relationship there is a substantive assumption.
+
+## Third look: residuals
+
+The residual for observation $i$ is its vertical distance from the fitted line:
+
+\[
+e_i=y_i-\widehat y_i,
+\qquad \widehat y_i=\widehat\beta_0+\widehat\beta_1x_i.
+\]
+
+A response boxplot asks, **"Is this response unusual among all responses?"**
+A residual display asks, **"Is this response unusual relative to what the fitted
+model predicts at this predictor value?"**
+
+```{r residual-classification}
+r_info <- bp_info(dat$residual)
+dat$residual_flag <- r_info$flag
+case_table <- dat[is_special,
+                  c("id", "x", "y", "fitted", "residual", "marginal_flag", "residual_flag")]
+knitr::kable(case_table, digits = 3, row.names = FALSE)
+
+# These assertions check the intended pedagogical contrast.
+stopifnot(identical(dat$marginal_flag[special_rows], c(TRUE, TRUE, FALSE)),
+          identical(dat$residual_flag[special_rows], c(FALSE, TRUE, TRUE)))
+```
+
+```{r residual-views, fig.width=10, fig.height=5, fig.cap="B and C have large residuals. A is near the fitted relationship despite its large response."}
+set.seed(9393)
+local({
+  par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+  box_points(dat$residual, main = "Boxplot of residuals", ylab = "Residual",
+             col = "grey40", exclude_points = special_rows)
+  abline(h = 0, lty = 3)
+  points(rep(1.17, 3), dat$residual[special_rows], pch = 17, col = case_col, cex = 1.1)
+  text(rep(1.17, 3), dat$residual[special_rows], labels = dat$id[special_rows],
+       pos = 4, col = case_col, font = 2)
+  plot(residual ~ x, data = dat, pch = 16, col = "grey60",
+       xlim = c(-0.5, 20), ylim = range(dat$residual) + c(-2, 3),
+       xlab = "Predictor X", ylab = "Residual", main = "Residuals against X")
+  abline(h = 0, lty = 3)
+  abline(h = c(r_info$lower, r_info$upper), lty = 2, col = "grey45")
+  points(dat$x[special_rows], dat$residual[special_rows], pch = 17, col = case_col, cex = 1.2)
+  text(dat$x[special_rows], dat$residual[special_rows], labels = dat$id[special_rows],
+       pos = 4, col = case_col, font = 2)
+})
+```
+
+| Case | Flagged in the response boxplot? | Flagged in the residual boxplot? | Interpretation |
+|:--|:--|:--|:--|
+| A | Yes | No | An extreme response explained by an extreme predictor. |
+| B | Yes | Yes | An extreme response that remains unusual given its predictor. |
+| C | No | Yes | A marginally ordinary response that the fitted relationship does not explain. |
+
+Some background observations may also be flagged by a residual boxplot. The
+same caution about automatic outlier rules still applies.
+
+**A diagnostic limitation.** Residuals are not independent copies of the model
+errors. Even under the standard constant-variance linear model,
+$\operatorname{Var}(e_i\mid X)=\sigma^2(1-h_{ii})$, where $h_{ii}$ is leverage.
+Thus a residual boxplot is an exploratory aid, not a calibrated formal outlier
+test. Residual-versus-predictor or residual-versus-fitted plots also reveal
+curvature and changing spread that a residual boxplot hides.
+
+## A bridge to influential observations
+
+Three different questions require three different concepts:
+
+| Concept | Question | Useful R quantity |
+|:--|:--|:--|
+| Residual size | Is the response far from the fitted relationship? | `resid(fit)`, `rstandard(fit)`, `rstudent(fit)` |
+| Leverage | Is the predictor configuration unusual? | `hatvalues(fit)` |
+| Influence | How much does the fitted model change when this case is omitted? | `cooks.distance(fit)`, case-deletion fits |
+
+With an intercept and one predictor,
+
+\[
+h_{ii}=\frac{1}{n}+\frac{(x_i-\bar x)^2}{\sum_j(x_j-\bar x)^2}.
+\]
+
+Leverage depends on $X$, not on $Y$. A has high leverage because its predictor
+value is far from the others. High leverage means **potential** to affect the
+fit; a high-leverage point close to the fitted line need not substantially
+change the estimated coefficients when omitted. It can still affect their
+precision and anchor the range over which a line is fitted.
+
+Cook's distance combines residual size and leverage. For this regression,
+with $p=2$ estimated coefficients and $s^2$ the residual mean square,
+
+\[
+D_i=\frac{e_i^2}{p s^2}\frac{h_{ii}}{(1-h_{ii})^2}.
+\]
+
+```{r diagnostics}
+dat$leverage <- hatvalues(fit)
+dat$standardized_residual <- rstandard(fit)
+dat$studentized_residual <- rstudent(fit)
+dat$cook <- cooks.distance(fit)
+knitr::kable(dat[is_special, c("id", "residual", "leverage",
+                              "standardized_residual", "studentized_residual", "cook")],
+             digits = 3, row.names = FALSE)
+```
+
+Standardized residuals use the overall residual scale and the leverage
+adjustment. Externally studentized residuals (`rstudent`) estimate the scale
+with the case omitted. They help with comparability, but neither a universal
+cutoff nor automatic deletion follows from this table. Several unusual cases
+can distort the fit and inflate the estimated error scale, partially masking
+one another.
+
+### Observe influence directly by leaving one case out
+
+```{r case-deletion}
+full_coef <- coef(fit)
+leave_out <- do.call(rbind, lapply(c("A", "B", "C"), function(label) {
+  fit_minus <- lm(y ~ x, data = dat[dat$id != label, ])
+  data.frame(Omitted = label,
+             Intercept = unname(coef(fit_minus)[1]),
+             Slope = unname(coef(fit_minus)[2]),
+             Change_intercept = unname(coef(fit_minus)[1] - full_coef[1]),
+             Change_slope = unname(coef(fit_minus)[2] - full_coef[2]),
+             Max_fitted_change = max(abs(predict(fit_minus, newdata = dat) - fitted(fit))))
+}))
+knitr::kable(leave_out, digits = 4, row.names = FALSE)
+```
+
+This is a sensitivity analysis, not a recommendation to discard observations.
+The last column compares predictions at the observed predictor values,
+including the location of the omitted case. For A, that location is outside
+the predictor range remaining after deletion.
+
+### What happens if the same high-leverage point moves off the line?
+
+Keep A's $X=18$ but change its response from 64 to 89. All other observations
+stay the same. Before running the code, predict which of the following change:
+A's leverage, its residual, the fitted slope, and its Cook's distance.
+
+```{r influence-counterfactual}
+dat_shift <- dat
+iA <- which(dat$id == "A")
+dat_shift$y[iA] <- 89
+fit_shift <- lm(y ~ x, data = dat_shift)
+fit_no_A <- lm(y ~ x, data = dat[dat$id != "A", ])
+
+compare_A <- data.frame(
+  Scenario = c("A on the generating line", "A moved upwards by 25"),
+  Leverage_A = c(hatvalues(fit)[iA], hatvalues(fit_shift)[iA]),
+  Residual_A = c(resid(fit)[iA], resid(fit_shift)[iA]),
+  Cook_A = c(cooks.distance(fit)[iA], cooks.distance(fit_shift)[iA]),
+  Fitted_slope = c(coef(fit)[2], coef(fit_shift)[2]),
+  Slope_without_A = rep(unname(coef(fit_no_A)[2]), 2)
+)
+knitr::kable(compare_A, digits = 4, row.names = FALSE)
+```
+
+```{r influence-comparison-plot, fig.width=10, fig.height=5, fig.cap="The same predictor value gives the same leverage in both panels. Moving its response away from the trend increases A's influence."}
+local({
+  par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+  data_list <- list(dat, dat_shift)
+  fit_list <- list(fit, fit_shift)
+  for (j in 1:2) {
+    dd <- data_list[[j]]
+    plot(y ~ x, data = dd, pch = 16, col = "grey65",
+         xlim = c(-0.5, 20), ylim = c(5, 96), xlab = "X", ylab = "Y",
+         main = c("A follows the trend", "A moves off the trend")[j])
+    abline(fit_no_A, col = blue, lwd = 2, lty = 2)
+    abline(fit_list[[j]], col = orange, lwd = 2)
+    points(dd$x[iA], dd$y[iA], pch = 17, cex = 1.3, col = "black")
+    text(dd$x[iA], dd$y[iA], "A", pos = 4, font = 2)
+    legend("topleft", c("Fit with A", "Fit without A"),
+           col = c(orange, blue), lty = c(1, 2), lwd = 2, bty = "n", cex = 0.8)
+  }
+})
+```
+
+A's leverage stays exactly the same because none of the predictor values
+change. Its residual and Cook's distance increase, and the fitted line rotates
+towards its new response. A high-leverage observation can pull the line toward
+itself, making its residual smaller than the deviation from the relationship
+supported by the remaining data. Looking only for the largest raw residual
+can therefore miss an influential case.
+
+**Questions for the next unit on linear models:** Is the mean relationship
+really linear? Does the conditional variance change with $X$? Are there missing
+predictors or groups? Are the unusual measurements correct? How sensitive are
+scientific conclusions to individual observations?
+
+# Additional discussion prompts
+
+Items 1–6 below review the distribution examples from Unit 05. They are
+optional extensions, rather than extra required analyses of the calibration
+CSV. Items 7–9 relate directly to the regression activity.
+
+1. **Anatomy.** For `c(1, 2, 3, 4, 5, 6, 7, 8, 20)`, calculate the median,
+   box edges, IQR, fences and whiskers. Check them with `boxplot.stats()`.
+   Why is the upper whisker not equal to the upper fence?
+2. **Units.** Transform that dataset to `100 + 10*z`. Prove algebraically
+   and verify in R that the same observations remain flagged.
+3. **Sample size.** Compare samples of sizes 50 and 1000 from the same model.
+   Distinguish predictions about the *number* of flags, their *fraction*, and
+   the probability of *at least one* flag.
+4. **Generating model.** Repeat the simulation with `rchisq(n, df = 1)` and
+   `rchisq(n, df = 10)`. Compare simulation results with population fences.
+   Does 1.5 times the IQR correspond to a common significance level?
+5. **Transformation.** Compare a boxplot of `rchisq(1000, 2)` with a boxplot of
+   its logarithm. Which observations change flag status? Explain why nonlinear
+   transformations differ from changes of units.
+6. **Point layers.** Modify the identical-boxplot example by plotting only
+   the points. What does the boxplot add, and what does it hide?
+7. **Conditional reasoning.** Describe A, B and C without using the word
+   *outlier*. Refer explicitly to $Y$, $X$, and the fitted relationship.
+8. **Influence.** Move A downwards instead of upwards. Compare the fitted
+   coefficients and Cook's distance. Does its leverage change?
+9. **Model adequacy.** Generate data from `y = 10 + x^2 + error`, fit `lm(y ~ x)`,
+   and inspect residuals against $X$. Could apparent residual anomalies reflect
+   a poor mean model rather than a few unusual observations?
+
+## Brief instructor notes / suggested answers
+
+For Exercise 1 the box edges are 3 and 7, the median is 5, the IQR is 4, and
+the fences are -3 and 13. The whiskers end at 1 and 8; 20 is flagged.
+
+For Exercise 2, if $w=a+bz$ with $b>0$, then its hinges transform as
+$Q_{j,w}=a+bQ_{j,z}$ and its IQR becomes $b\operatorname{IQR}_z$.
+Consequently, $L_w=a+bL_z$ and $U_w=a+bU_z$.
+Thus $w_i>U_w$ if and only if $z_i>U_z$, and similarly for the lower fence.
+
+For Exercise 3, fixed-fence expected counts grow linearly with $n$ while their
+expected fractions remain $p_F$. The probability of at least one flag grows
+with $n$. Estimated sample fences add finite-sample variability and dependence.
+
+For Exercise 4, the population flagged percentages are approximately 7.57%
+for one degree of freedom and 1.93% for ten, compared with 4.81% for two.
+These differences occur without contamination.
+
+For Exercise 5, logarithms do not preserve additive distances or the IQR-fence
+inequalities. Always report the scale on which a boxplot was computed.
+
+For Exercises 7–8, A illustrates a marginally extreme response compatible with
+the conditional mean; B and C have large conditional deviations. Moving A's
+response changes influence but not leverage.
+
+For Exercise 9, systematic curvature in residuals indicates misspecification
+of the mean function. Declaring the observations at the ends of the range
+"bad data" would confuse a model limitation with a measurement problem.
+
+# Take-home messages
+
+A boxplot summarizes a distribution; it does not validate measurements.
+The 1.5-IQR rule flags different proportions under different generating models,
+and larger datasets offer more opportunities for flags. Show the observations
+when feasible. When predictors are available, examine the response relative
+to its context: a large response can be entirely compatible with a model, and
+an ordinary-looking response can have a large residual. Finally, an unusual
+predictor, a large residual and an influential case are distinct concepts.
+
+# Data provenance and optional reproduction check
+
+The supplied CSV follows the original data-construction recipe: 80 background
+observations with seed 8675309, plus the three stated cases. During preparation,
+the random stream was reproduced using a numerical port of R's default
+Mersenne-Twister initialization and inversion-normal scheme, with the inverse
+normal CDF evaluated in SciPy. Reference random-number sequences and the
+intended flag classifications were checked. Native R was unavailable, so
+bit-for-bit reproduction and R knitting have not been verified.
+
+The CSV is the common input for students and this solution. The following
+optional R chunk reproduces the original recipe and compares it with that
+input to a numerical tolerance. It is disabled by default and does not
+overwrite the distributed data.
+
+```{r optional-reproduction-check, eval=FALSE}
+set.seed(8675309, kind = "Mersenne-Twister", normal.kind = "Inversion")
+background <- data.frame(id = sprintf("R%02d", 1:80),
+                         x = seq(0, 10, length.out = 80))
+background$y <- 10 + 3 * background$x + rnorm(80, sd = 1.2)
+special <- data.frame(id = c("A", "B", "C"),
+                      x = c(18, 5, 1), y = c(64, 65, 30))
+regenerated <- rbind(background, special)
+distributed <- dat_raw[match(regenerated$id, dat_raw$id), ]
+stopifnot(identical(regenerated$id, distributed$id),
+          isTRUE(all.equal(regenerated$x, distributed$x, tolerance = 1e-10)),
+          isTRUE(all.equal(regenerated$y, distributed$y, tolerance = 1e-10)))
+```
+
+See R's [random-number generation documentation](https://stat.ethz.ch/R-manual/R-devel/library/base/html/Random.html)
+for the default algorithms and explicit seed settings.
+
+# Sources and further reading
+
+- R documentation: [Box Plot Statistics](https://stat.ethz.ch/R-manual/R-devel/library/grDevices/html/boxplot.stats.html).
+  Authoritative details of base R hinges and whiskers.
+- Wilke, C. O. *Fundamentals of Data Visualization*:
+  [Visualizing many distributions at once](https://clauswilke.com/dataviz/boxplots-violins.html).
+  Examples comparing distribution summaries and individual observations.
+- ggplot2 documentation: [A box and whiskers plot](https://ggplot2.tidyverse.org/reference/geom_boxplot.html).
+  Quartile conventions and point-overlay options.
+- R documentation: [Regression Deletion Diagnostics](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/influence.measures.html).
+  Definitions and functions for residual, leverage and influence diagnostics.
+
+The regression analyses use the distributed teaching CSV. Its construction
+and optional reproduction check are documented above.
+
+
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.
+

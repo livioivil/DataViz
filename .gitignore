@@ -1,0 +1,18 @@
+# R session state and editor settings
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# Intermediate LaTeX output; retain published HTML/PDF and their assets
+*.log
+*.aux
+*.out
+*.toc
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+
+# Operating system files
+.DS_Store
+Thumbs.db

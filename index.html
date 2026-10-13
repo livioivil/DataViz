@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Data Visualization · Course materials</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#172c3c;background:#f3f6f8;line-height:1.6}
+body{margin:0}main{max-width:1060px;margin:auto;padding:32px 24px 64px}header{padding:24px 0 16px}
+h1{font-size:clamp(2rem,5vw,3.5rem);line-height:1.15;margin:12px 0}h2{margin-top:40px}h3{margin:0;font-size:1.2rem}
+a{color:#07568a;text-underline-offset:3px}a:focus-visible,summary:focus-visible{outline:3px solid #bd5615;outline-offset:4px}
+.meta{color:#466074}.intro{max-width:760px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:16px}
+.card{background:white;border:1px solid #d3dfe6;border-radius:12px;padding:22px;display:flex;flex-direction:column}
+.code{font-size:.85rem;font-weight:700;color:#466074;margin:0 0 8px}.card p{margin:12px 0 18px}
+.actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:auto}.actions a{border:1px solid #a3bac9;border-radius:6px;padding:7px 12px;font-size:.9rem;background:#f5fafc}
+nav{display:flex;flex-wrap:wrap;gap:12px;margin:20px 0}details{background:white;border:1px solid #d3dfe6;padding:16px;border-radius:8px}summary{cursor:pointer;font-weight:600}
+footer{margin-top:40px;border-top:1px solid #d3dfe6;padding-top:18px;font-size:.9rem}
+@media print{body{background:white}.card{break-inside:avoid}.actions,nav{display:none}}
+</style>
+</head>
+<body><main>
+<header><p class="meta">Livio Finos · University of Padova</p><h1>Data Visualization</h1>
+<p class="intro">Course lessons, activities, and datasets. Follow the sequence of units and consult further examples as needed. Materials are updated throughout the course.</p>
+<nav aria-label="Quick links"><a href="#units">Units and materials</a><a href="#datasets">CSV datasets</a><a href="https://github.com/livioivil/DataViz/archive/refs/heads/main.zip">Download everything (ZIP)</a><a href="https://github.com/livioivil/DataViz">GitHub repository</a></nav>
+<details><summary>Reading and downloading files</summary><p>“Read HTML” opens the lesson in your browser. “Download” buttons save individual files; if your browser opens a document, use its save command. To work with R, download and extract the entire repository, keeping the original folders. Consult feedback and worked examples after your own attempt.</p><p>You do not need R to read HTML and PDF files. The instructor will provide the schedule, submission instructions, and assessment criteria.</p></details></header>
+<div id="units">
+<section aria-label="Course units"><h2>Course units</h2><div class="grid"><article class="card"><p class="code">01</p><h3>History of statistical visualization</h3><p>Read and discuss foundational examples by Playfair, Nightingale, Snow, and Minard.</p><div class="actions"><a href="01_historical_statistical_plots.html">Read HTML</a><a href="01_historical_statistical_plots.html" download>Download HTML</a><a href="01_historical_statistical_plots.pdf" download>Download PDF</a><a href="01_historical_statistical_plots.rmd" download>Rmd source</a></div></article>
+<article class="card"><p class="code">02</p><h3>Activity 1 · Tables, counts, and proportions</h3><p>Choose denominators and charts that match the analysis question.</p><div class="actions"><a href="02_student_activity_1_table_counts.html">Read HTML</a><a href="02_student_activity_1_table_counts.html" download>Download HTML</a><a href="02_student_activity_1_table_counts.pdf" download>Download PDF</a><a href="02_student_activity_1_table_counts.rmd" download>Rmd source</a></div></article>
+<article class="card"><p class="code">03</p><h3>Statistical reasoning, perception, and colour</h3><p>Evaluate scales, visual encodings, and colour choices.</p><div class="actions"><a href="03_visualization_reasoning_perception_colour.html">Read HTML</a><a href="03_visualization_reasoning_perception_colour.html" download>Download HTML</a><a href="03_visualization_reasoning_perception_colour.pdf" download>Download PDF</a><a href="03_visualization_reasoning_perception_colour.Rmd" download>Rmd source</a></div></article>
+<article class="card"><p class="code">04</p><h3>Activity 2 · Reaction time and accuracy</h3><p>Work in groups to prepare a reproducible exploratory report with repeated measurements.</p><div class="actions"><a href="04_student_activity2_reaction_time.html">Read HTML</a><a href="04_student_activity2_reaction_time.html" download>Download HTML</a><a href="04_student_activity2_reaction_time.pdf" download>Download PDF</a><a href="04_student_activity2_reaction_time.Rmd" download>Rmd source</a></div></article></div></section>
+<section aria-label="Examples and further study"><h2>Examples and further study</h2><div class="grid"><article class="card"><p class="code">00</p><h3>R Graphics Showcase</h3><p>A collection of charts and R code to consult throughout the course. A complete PDF is not yet available.</p><div class="actions"><a href="00_graphics_showcase.html">Read HTML</a><a href="00_graphics_showcase.html" download>Download HTML</a><a href="00_graphics_showcase.Rmd" download>Rmd source</a></div></article></div></section>
+<section aria-label="Feedback and worked examples"><h2>Feedback and worked examples</h2><div class="grid"><article class="card"><p class="code">04-F</p><h3>Activity 2 · Feedback and worked example</h3><p>Consult after preparing your own report to compare analytical choices.</p><div class="actions"><a href="04_student_activity2_reaction_time_feedback.html">Read HTML</a><a href="04_student_activity2_reaction_time_feedback.html" download>Download HTML</a><a href="04_student_activity2_reaction_time_feedback.pdf" download>Download PDF</a><a href="04_student_activity2_reaction_time_feedback.Rmd" download>Rmd source</a></div></article>
+<article class="card"><p class="code">04-A</p><h3>Reaction time · Further analysis</h3><p>A reference report with paired participant summaries.</p><div class="actions"><a href="04_reaction_time_analysis.html">Read HTML</a><a href="04_reaction_time_analysis.html" download>Download HTML</a><a href="04_reaction_time_analysis.pdf" download>Download PDF</a><a href="04_reaction_time_analysis.Rmd" download>Rmd source</a></div></article></div></section>
+<section aria-label="Additional materials"><h2>Additional materials</h2><div class="grid"><article class="card"><p class="code">EX-01</p><h3>Lab · 30 September 2026</h3><p>Importing, summarizing, and plotting the students.csv dataset.</p><div class="actions"><a href="extra/lesson_2026_09_30.html">Read HTML</a><a href="extra/lesson_2026_09_30.html" download>Download HTML</a><a href="extra/lesson_2026_09_30.pdf" download>Download PDF</a><a href="extra/lesson_2026_09_30.Rmd" download>Rmd source</a></div></article></div></section>
+</div>
+<section id="datasets"><h2>Activity datasets</h2><div class="grid"><article class="card"><h3>Reaction time</h3><p>Activity 2: participant, condition, trial, accuracy, and response time.</p><div class="actions"><a href="data/RT_data.csv" download>Download CSV</a></div></article>
+<article class="card"><h3>Attendance and assignments</h3><p>Additional lab: class attendance and submitted assignments.</p><div class="actions"><a href="data/students.csv" download>Download CSV</a></div></article>
+<article class="card"><h3>Memory, hippocampus, and continuous age</h3><p>Available for further study; not yet assigned to a course unit.</p><div class="actions"><a href="data/hippocampus_memory_age_continuous.csv" download>Download CSV</a></div></article>
+<article class="card"><h3>Memory, hippocampus, and age groups</h3><p>A variant with age groups; not yet assigned to a course unit.</p><div class="actions"><a href="data/hippocampus_memory_age_group.csv" download>Download CSV</a></div></article></div></section>
+<footer>Course materials are updated throughout the term · <a href="https://github.com/livioivil/DataViz/issues">Report an error</a></footer>
+</main></body></html>
