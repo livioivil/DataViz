@@ -271,7 +271,7 @@ since, \(Q_1=-0.67449\), \(Q_3=0.67449\) and
 $IQR=2\Phi^{-1}(0.75)\,\sigma\approx1.34898\,\sigma$:
 
 
- | Inferior Fence  \(L\) | Superior Fence  \(U\) | \(P(Y<L)\) | \(P(Y>U)\) | \(P( (Y<L) or (Y>U) ) \) |
+| | Inferior Fence  \(L\) | Superior Fence  \(U\) | \(P(Y<L)\) | \(P(Y>U)\) | \(P( (Y<L) or (Y>U) ) \) |
 |---|---:|---:|---:|---:|---:|
 | \(N(0,1)\) | -2,69796 | 2,69796 | 0,34883% | 0,34883% | **0,69766%** |
 

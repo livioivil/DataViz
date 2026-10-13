@@ -1,0 +1,138 @@
+---
+title: "Teacher material: Kernel Density Estimation"
+author: "Livio Finos, University of Padova"
+subtitle: "Companion to unit 07: bandwidth and sample size"
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: readable
+    self_contained: true
+---
+
+# Lesson preparation
+
+Suggested timing: 75 minutes of teaching plus 30-45 minutes of practical work.
+The student handout is `07_kde_bandwidth_sample_size.Rmd`. It contains the
+explanations and activities, but no teacher prompts or hidden worked answers.
+This companion holds the facilitation notes and suggested answers separately.
+
+The normal-mixture simulations are retained because they provide a known
+population density for distinguishing bias from variability. The real
+`faithful` and `rivers` examples are descriptive; there is no known population
+density to overlay and their collection does not establish independent random
+sampling.
+
+```{r render-instructions, eval=FALSE}
+rmarkdown::render("07_kde_bandwidth_sample_size.Rmd",
+                  output_format = "html_document")
+rmarkdown::render("07_kde_bandwidth_sample_size_teacher.Rmd")
+```
+
+The student document's `simulation_reps` parameter controls Monte Carlo
+precision; use at least 20 repetitions for a quick check and the default 120
+for the handout. It does not change the size of the simulated samples.
+
+# Suggested teaching sequence
+
+Start with individual kernels and ask students to point to an observation,
+its own contribution, and the sum. Distinguish the mode of a Gaussian
+contribution from the modes of the sum. Define bandwidth before interpreting
+any change in the curves.
+
+For the mixture bandwidth panels, **before revealing the truth**, ask students
+to count the apparent peaks. Hide the generating-density overlay temporarily
+if using these plots live, then compare their interpretations with it. A
+wiggle is not automatically a population subgroup; a wide bandwidth can also
+hide population structure.
+
+Introduce Sheather-Jones as an estimate of the bias-variability balance using
+pilot estimates of curvature. The solve-the-equation derivation and the
+leave-one-out cross-validation derivation are optional for this level.
+Distinguish the sample size from `density()`'s evaluation-grid argument `n`.
+
+For the kernel comparison, hold data, bandwidth and axes fixed. Then change
+only bandwidth. Rectangular kernels provide a useful example of local
+roughness without changing the broad waiting-time structure. Compact support
+relative to an observation is not a correction for the variable's boundary.
+
+# Activity 1: units and probability
+
+Use the positive durations supplied in the activity, not `x_small`. Bandwidth
+12 seconds corresponds to 0.2 minutes. Density per minute is 60 times density
+per second at matching locations. When converting the minutes curve back to
+seconds, multiply its x coordinates by 60 and divide its heights by 60.
+The curves should overlap.
+
+For a Gaussian KDE the interval probability can be computed exactly:
+
+```{r units-check}
+duration_seconds <- c(25, 35, 48, 60, 74, 90, 110, 135)
+h_seconds <- 12
+duration_minutes <- duration_seconds / 60
+h_minutes <- h_seconds / 60
+p_seconds <- mean(pnorm((90 - duration_seconds) / h_seconds) -
+                  pnorm((30 - duration_seconds) / h_seconds))
+p_minutes <- mean(pnorm((1.5 - duration_minutes) / h_minutes) -
+                  pnorm((0.5 - duration_minutes) / h_minutes))
+c(seconds = p_seconds, minutes = p_minutes)
+stopifnot(isTRUE(all.equal(p_seconds, p_minutes)))
+```
+
+Assessment: a consistent conversion of both axes, matching probabilities,
+and an explanation in terms of probability as area rather than height alone.
+
+# Activity 2: real waiting times
+
+Look for the broad short-wait and long-wait regions and check their persistence
+across the three bandwidths. Narrow bandwidths add local detail; wide ones
+blur it. Peaks alone do not identify latent population groups. Discuss
+rounding and why these data cannot validate an independence assumption.
+
+# Activity 3: sample size versus smoothing
+
+At fixed bandwidth, sampling variability decreases with independent sample
+size, while smoothing bias remains. Small random peaks tend to become less
+prominent; this need not happen monotonically in every nested sample sequence.
+Replicating observations produces the same KDE, not additional independent
+information. Use several seeds before drawing a conclusion.
+
+# Activity 4: repeated samples
+
+Small bandwidths produce greater variability; large bandwidths blur modes
+and increase smoothing bias. More observations reduce variability at fixed
+bandwidth, not its bias. More simulation repetitions improve the Monte Carlo
+estimates of those properties without changing the estimator.
+Ask students to describe the repeated curves before inspecting the error
+table, even if both appear in the handout.
+
+# Activity 5: automatic bandwidth
+
+Students should report the actual `nrd0` and `SJ` values for eruption duration,
+show sensitivity plots in minutes, and identify persistent broad features.
+Sheather-Jones estimates curvature rather than relying only on spread;
+neither selector guarantees that every peak is meaningful. The `n` argument
+of `density()` controls grid resolution; `adjust` changes smoothing.
+
+# Activity 6: kernels
+
+Compare broad waiting-time regions rather than tiny wiggles. Differences
+between kernels mostly affect local shape in this example, while widening
+the bandwidth changes resolution. The activity plot uses solid lines and
+colours to identify kernels. Equal bandwidth in R means equal kernel
+standard deviation, not identical support or exactly equal risk.
+
+# Activity 7: support and the log transformation
+
+For positive measurements, fit a KDE to their logarithms and calculate
+`density_log(log(x)) / x` at positive original-scale grid points.
+The derivative `d log(x) / dx = 1/x` converts horizontal interval widths;
+the same factor converts heights to preserve probability as area. Calling
+this a Jacobian is mathematically correct, but start with interval widths.
+
+The log-transformed estimate respects positivity. It is not the true density,
+and it smooths relative, rather than absolute, differences. The ordinary
+Gaussian KDE's negative mass is `mean(pnorm(-river_lengths / h_river))`.
+Simply clipping the ordinary plot at zero does not repair the estimator.
+River lengths describe the supplied collection of major rivers, not all
+rivers sampled at random.
