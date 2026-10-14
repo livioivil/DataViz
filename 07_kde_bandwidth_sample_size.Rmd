@@ -20,7 +20,7 @@ params:
   simulation_reps: 120
 ---
 
-```{r setup, include=FALSE}
+```{r setup, include=TRUE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
                      fig.width = 8, fig.height = 5, fig.align = "center",
                      dpi = 120, comment = "#>")
@@ -224,7 +224,7 @@ explains the rule of thumb and the Sheather-Jones idea in more detail.
 waiting <- datasets::faithful$waiting
 h_wait <- bw.SJ(waiting)
 g_wait <- seq(min(waiting) - 15, max(waiting) + 15, length.out = 501)
-wait_adjust <- c(.5, 1, 2)
+wait_adjust <- c(1/10,1/2,1,2,10)
 wait_curves <- sapply(wait_adjust, function(a)
   kde(waiting, g_wait, a * h_wait))
 ```
@@ -238,7 +238,10 @@ size, and bandwidth in your explanation. Does a peak prove that there is a
 distinct latent population group?
 
 ```{r faithful-bandwidth-panels, fig.width=10, fig.height=3.8, fig.cap="The same real waiting times at three smoothing resolutions. There is no known population density to overlay."}
-with_panels(1, 3, {
+
+wait_adjust=c(1/10,1/2,1,2,10)
+
+with_panels(2, 3, {
   for (j in seq_along(wait_adjust)) {
     hist(waiting, breaks = seq(40, 100, by = 5), probability = TRUE,
          xlim = range(g_wait), ylim = c(0, max(wait_curves) * 1.1),
@@ -769,6 +772,193 @@ legend("topright", c("Ordinary KDE", "Log-transform KDE"),
        col = c(blue, orange), lty = 1, lwd = 2, bty = "n")
 mean(pnorm(-river_lengths / h_river))
 ```
+
+# Activity 8: build and compare custom KDEs {#activity-8-custom-kdes}
+
+Use the real waiting times in `datasets::faithful$waiting`, already introduced
+in Activity 2. There are 272 observations, measured in minutes. The data have
+two broad waiting-time regions; there is no known population density to
+overlay. Your task is to construct two KDE functions and investigate how
+kernel shape affects their description of these observations.
+
+Alongside a rectangular kernel, design a kernel that you expect to **"do
+its job poorly"**: give it low values near zero and higher values near the
+edges of its support. Choose its shape yourself, then investigate whether
+and why this allocation of density produces an unhelpful summary. The aim
+is to explain the mechanism, not just to label a curve as good or bad.
+
+**Main comparison: equal kernel standard deviations.** In this activity the
+argument `h` of both functions means the standard deviation of the smoothing
+kernel, in minutes, just as `bw` does in R's `density()`. This is a measure of
+the width of each contribution, not the standard deviation of the waiting
+times themselves.
+
+```{r custom-kde-activity-data}
+x_activity <- datasets::faithful$waiting
+h_activity <- bw.SJ(x_activity)
+adjust_activity <- c(.5, 1, 2)
+# Define the comparison grid after choosing your custom kernel and its SD.
+c(sample_size = length(x_activity), kernel_sd_minutes = h_activity)
+```
+
+The SJ reference value is approximately 2.50 minutes. You will also compare
+approximately 1.25 and 5.01 minutes (half and twice SJ), keeping the same grid
+and axis limits. These values are exploratory resolutions, not optimal
+bandwidths established separately for the custom kernels. Recall the
+[intuition behind bandwidth selection](#bandwidth-selectors-explained).
+
+## Step 1: define the raw kernels and their scales
+
+Use the following rectangular kernel, which is zero outside $[-1,1]$:
+
+\[
+K_R(u)=\begin{cases}\frac12,& |u|\leq1,\\0,& |u|>1.\end{cases}
+\]
+
+Design a second kernel $K_C$ that is also zero outside $[-1,1]$, nonnegative,
+symmetric, and has area one, but has low values near zero and higher values
+near the edges. You are not given a formula: choose a function, normalize
+it, and check these requirements. Define it as a vectorized R function
+`K_custom(u)`.
+
+Plot both raw shapes with solid lines. Before looking at the KDEs, explain
+where each kernel places density relative to a single observation. Predict
+what your custom kernel might do poorly and what evidence would support
+or challenge your prediction.
+
+Calculate the standard deviation of your chosen raw kernel. Since both
+kernels are symmetric about zero, their means are zero:
+
+\[
+\sigma_R=\sqrt{1/3},\qquad
+\sigma_C=\sqrt{\int_{-1}^{1}u^2 K_C(u)\,du}.
+\]
+
+If the scale multiplying a raw kernel is $s$, the standard deviation of its
+contribution is $s\sigma_K$. To give both contributions the specified
+standard deviation $h$, use
+
+\[
+s_R=\frac{h}{\sigma_R}=h\sqrt3,\qquad
+s_C=\frac{h}{\sigma_C}.
+\]
+
+At the SJ reference value the rectangular raw scale is approximately 4.34
+minutes. Calculate the custom raw scale from your own kernel's SD. Both
+contributions will have SD 2.50 minutes, but their compact support widths
+may differ. Equal SD does not imply equal support,
+equal shape, or equal statistical error.
+
+## Step 2: implement two KDE functions
+
+Construct `kde_rectangular(x, grid, h)` and
+`kde_custom(x, grid, h, kernel, kernel_sd)`. Pass your raw kernel function
+and its standard deviation to the second function. Use the
+appropriate raw scale $s_K=h/\sigma_K$ in
+
+\[
+\widehat f_h(t)=\frac{1}{n s_K}\sum_{i=1}^n
+ K\!\left(\frac{t-X_i}{s_K}\right).
+\]
+
+For each grid value `t`, calculate `u <- (t - x) / scale`, apply the raw
+kernel, average the contributions and divide by `scale`. Check finite
+observations and a single positive finite `h`; also check that `kernel_sd`
+is positive and finite. Return one height per grid
+value and do not call `density()` inside your functions.
+
+Complete this chunk before running it; the unfinished handout does not
+execute it when knitted.
+
+```{r custom-kde-functions-task, eval=FALSE}
+K_custom <- function(u) {
+  # Choose a shape with low values near zero and higher values near the edges.
+  # Return zero outside [-1, 1] and normalize the area to one.
+  stop("Design and implement your custom kernel.")
+}
+sigma_custom <- NA_real_  # Calculate the SD of your normalized raw kernel.
+
+kde_rectangular <- function(x, grid, h) {
+  # h is the requested kernel SD in minutes.
+  # Use scale <- h / sqrt(1 / 3), then apply K_R.
+  stop("Complete the rectangular KDE.")
+}
+kde_custom <- function(x, grid, h, kernel, kernel_sd) {
+  # Use scale <- h / kernel_sd, then apply kernel(u).
+  stop("Complete the custom KDE.")
+}
+```
+
+## Step 3: apply and plot at a common SD
+
+Apply both functions to the waiting times. The existing Gaussian helper
+`kde()` uses a standard-normal kernel, so its `h` is already the kernel SD.
+All three curves below therefore use the **same kernel SD in minutes**.
+
+```{r custom-kde-comparison-task, eval=FALSE}
+# Cover both compact kernels at all requested SDs, plus practically all
+# Gaussian mass (within four SDs of the most extreme observations).
+margin_activity <- max(4, 1 / sqrt(1 / 3), 1 / sigma_custom) *
+                   max(adjust_activity) * h_activity
+grid_activity <- seq(min(x_activity) - margin_activity,
+                     max(x_activity) + margin_activity,
+                     length.out = 8193)
+
+y_rect <- kde_rectangular(x_activity, grid_activity, h_activity)
+y_custom <- kde_custom(x_activity, grid_activity, h_activity,
+                       kernel = K_custom, kernel_sd = sigma_custom)
+y_gauss <- kde(x_activity, grid_activity, h_activity)
+
+plot(grid_activity, y_rect, type = "l", col = blue, lwd = 2,
+     ylim = c(0, max(y_rect, y_custom, y_gauss)),
+     xlab = "Waiting time (minutes)", ylab = "Density",
+     main = paste("Common kernel SD:", round(h_activity, 2), "minutes"))
+lines(grid_activity, y_custom, col = orange, lwd = 2)
+lines(grid_activity, y_gauss, col = green, lwd = 2)
+rug(x_activity)
+legend("topright", c("Rectangular", "Custom", "Gaussian"),
+       col = c(blue, orange, green), lty = 1, lwd = 2, bty = "n")
+
+c(rectangular_area = trapz(grid_activity, y_rect),
+  custom_area = trapz(grid_activity, y_custom),
+  gaussian_area_on_grid = trapz(grid_activity, y_gauss))
+```
+
+The grid covers the full support of the two compact-kernel estimates at
+all three requested SDs. Their numerical areas should be close to one;
+small errors occur at jumps. The Gaussian has infinite support, but the
+extended grid should also capture practically all its mass.
+
+## Step 4: sensitivity and discussion
+
+Submit your functions, the kernel-shape plots, and KDE comparisons at
+`.5 * h_activity`, `h_activity`, and `2 * h_activity`. Use the same x and y
+limits across panels and only solid lines.
+
+1. Which broad waiting-time regions persist across kernels and bandwidths?
+   Which local peaks or shoulders change? Compare them with the rug; a peak
+   does not automatically identify a population subgroup.
+2. Start with a single observation: where does your custom kernel place
+   its largest contributions, and how much density does it place near the
+   observation itself? Explain how this behaviour carries over to the sum
+   of contributions. Does it produce displaced peaks, extra shoulders, or
+   irregularities you would hesitate to interpret? Connect any unhelpful
+   features to the kernel's allocation of density rather than just its name.
+3. Explain why using the same raw scale for the rectangular and custom
+   kernels would compare different SDs. Report the SD and both raw scales
+   in minutes for each panel.
+4. Did the kernel "do its job poorly" in the way you predicted? Explain why
+   or why not, and whether changing the bandwidth alters your conclusion.
+   Can a nonnegative estimate with area one still give an unhelpful visual
+   summary? Does finding an unhelpful result here prove the kernel is invalid
+   or fails for every dataset?
+
+**Interpretation.** A kernel satisfying the stated conditions is
+mathematically valid, even if you find its visual summary unhelpful. The waiting
+times already contain broad structure, so do not attribute their two main
+regions to the kernel alone. Kernel shape can add local irregularity, and
+its impact depends on bandwidth. Matching SD makes scale explicit; it does
+not make the kernels equivalent or select their respective optimal bandwidths.
 
 # References
 
