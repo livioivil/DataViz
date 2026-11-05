@@ -1,0 +1,345 @@
+---
+title: "Penguins: distributions, groups and hidden associations"
+subtitle: "A Course on Data Visualization · Group Activity"
+author: "Livio Finos, University of Padova"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    number_sections: false
+    code_folding: show
+    theme: readable
+    self_contained: true
+lang: en
+---
+
+**Main question:** How does accounting for species and sex change our description of penguin body measurements and the relationships between them?
+
+You will combine boxplots, one-dimensional kernel density estimates (KDEs), stratified scatterplots, Pearson correlations and comparisons within groups. All analyses are descriptive: focus on the direction, strength and shape of the observed patterns. A final optional section introduces bivariate density contours. Work through Sections 1–6 before attempting Section 7.
+
+**Worked solutions — distribute after the activity.**
+
+The observational unit is a penguin in the Palmer Archipelago dataset. The measurements were collected in 2007–2009. The dataset contains three species and both numerical and categorical variables.
+
+This document repeats the questions and provides one reproducible analysis. Other well-justified graphical choices are possible. Numerical results and sample sizes are computed from `data/penguins.csv` when you knit the file.
+
+## Getting started
+
+Open this file in RStudio and choose **Knit** to produce an HTML report. Install the packages below once, from the console. Place this Rmd in the folder that contains the `data` folder; the supplied dataset must be at `data/penguins.csv`. When running chunks interactively, use that same folder as the working directory. The CSV is a local copy of the Palmer Penguins data distributed by the `palmerpenguins` project; its provenance and citation are given below. You do not need to install that data package. `MASS` is used only for the optional bivariate KDE section.
+
+```{r installation, eval=FALSE}
+install.packages(c("ggplot2", "MASS", "knitr", "rmarkdown"))
+```
+
+```{r setup}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
+  fig.width = 8, fig.height = 5, dpi = 120)
+library(ggplot2)
+theme_set(theme_minimal(base_size = 12))
+set.seed(314159)
+data_file <- file.path("data", "penguins.csv")
+if (!file.exists(data_file)) {
+  stop("Cannot find data/penguins.csv. Put the data folder next to this Rmd file.")
+}
+p_raw <- read.csv(data_file, stringsAsFactors = FALSE,
+                  na.strings = c("", "NA"), strip.white = TRUE)
+required <- c("species", "island", "sex", "body_mass_g",
+              "bill_length_mm", "bill_depth_mm")
+missing_columns <- setdiff(required, names(p_raw))
+if (length(missing_columns)) {
+  stop("Missing CSV columns: ", paste(missing_columns, collapse = ", "))
+}
+# CSV files do not preserve R factor levels: recreate them explicitly.
+p_raw$species <- trimws(p_raw$species)
+p_raw$sex <- tolower(trimws(p_raw$sex))
+stopifnot(all(na.omit(p_raw$species) %in% c("Adelie", "Chinstrap", "Gentoo")),
+          all(na.omit(p_raw$sex) %in% c("female", "male")))
+p_raw$species <- factor(p_raw$species, levels = c("Adelie", "Chinstrap", "Gentoo"))
+p_raw$sex <- factor(p_raw$sex, levels = c("female", "male"))
+p_raw$island <- factor(trimws(p_raw$island))
+numeric_columns <- c("body_mass_g", "bill_length_mm", "bill_depth_mm")
+stopifnot(all(vapply(p_raw[numeric_columns], is.numeric, logical(1))))
+p_raw$row_id <- seq_len(nrow(p_raw))
+species_colours <- c(Adelie = "#D55E00", Chinstrap = "#0072B2", Gentoo = "#009E73")
+
+# Analysis populations: each excludes only the variables needed for that task.
+p_mass <- p_raw[complete.cases(p_raw[c("body_mass_g", "species", "sex")]), ]
+p_bill <- p_raw[complete.cases(p_raw[c("bill_length_mm", "bill_depth_mm", "species")]), ]
+
+# We use sample quartiles (R quantile type 7), not boxplot.stats() hinges.
+flag_iqr <- function(x) {
+  q <- quantile(x, c(0.25, 0.75), type = 7, names = FALSE)
+  spread <- q[2] - q[1]
+  x < q[1] - 1.5 * spread | x > q[2] + 1.5 * spread
+}
+```
+
+Keep the same analysis rows when comparing graphical summaries. Record any exclusions and their reasons. Use units in axis labels, common scales for comparable panels, and captions stating the population or subgroup shown.
+
+# 1. Understand the observations and analysis samples
+
+Inspect `p_raw`. Make a compact codebook for `species`, `island`, `sex`, `body_mass_g`, `bill_length_mm` and `bill_depth_mm`.
+
+1. Count observations and missing values. Report the sizes of `p_mass` and `p_bill` and explain why they differ.
+2. Tabulate species by sex, including missing sex values, and species by island.
+3. Can you compare every species on every island? Explain why this matters when comparing islands while holding species fixed.
+
+Use `p_mass` in Sections 2–3 and 5, and `p_bill` in Sections 4 and 7. These samples have different purposes; do not interpret differences between their summaries as an effect of missingness alone.
+
+```{r answer-1}
+knitr::kable(data.frame(variable = names(p_raw),
+  missing = colSums(is.na(p_raw))), row.names = FALSE)
+knitr::kable(data.frame(sample = c("Original", "Mass/species/sex", "Bill/species"),
+  n = c(nrow(p_raw), nrow(p_mass), nrow(p_bill))))
+table(p_raw$species, p_raw$sex, useNA = "ifany")
+table(p_raw$species, p_raw$island, useNA = "ifany")
+```
+
+**Interpretation and discussion**
+
+Species, island and sex are categorical; mass is measured in grams and both bill measurements in millimetres. Missing sex does not require removing a record from an analysis that uses only bill measurements and species. Complete-case analysis can nevertheless change the population represented if missingness is selective.
+
+Species and island are not fully crossed: some species occur on only one sampled island. The observations do not support comparisons for the missing combinations. Comparisons involving island and species require checking which within-island or within-species contrasts the data actually support.
+
+# 2. Boxplots: unusual relative to which group?
+
+Plot body mass by species, then by sex within species. Overlay observations with horizontal jitter only. Use a common vertical scale.
+
+Apply the supplied `flag_iqr()` rule to body mass (a) in the pooled sample, (b) within species and (c) within species–sex groups. Compare the number and identities of the flagged observations. Do not remove them.
+
+Does every flagged point indicate a measurement error? Does a point have to be extreme overall to be extreme within its group? Explain what can be learned even if a particular rule flags no observations.
+
+```{r answer-2}
+ggplot(p_mass, aes(species, body_mass_g, colour = species)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.12, height = 0, seed = 101),
+             alpha = 0.5) + scale_colour_manual(values = species_colours) +
+  labs(x = "Species", y = "Body mass (g)") + guides(colour = "none")
+
+ggplot(p_mass, aes(sex, body_mass_g, colour = sex)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.12, height = 0, seed = 102),
+             alpha = 0.5) + facet_wrap(~ species) +
+  scale_colour_manual(values = c(female = "#CC79A7", male = "#0072B2")) +
+  labs(x = "Sex", y = "Body mass (g)") + guides(colour = "none")
+
+p_mass$flag_pooled <- flag_iqr(p_mass$body_mass_g)
+p_mass$flag_species <- as.logical(ave(p_mass$body_mass_g, p_mass$species,
+                                    FUN = flag_iqr))
+p_mass$flag_species_sex <- as.logical(ave(p_mass$body_mass_g,
+  interaction(p_mass$species, p_mass$sex, drop = TRUE), FUN = flag_iqr))
+flags <- c("flag_pooled", "flag_species", "flag_species_sex")
+knitr::kable(data.frame(rule = flags, count = colSums(p_mass[flags]),
+  percent = 100 * colMeans(p_mass[flags])), digits = 2, row.names = FALSE)
+selected <- rowSums(p_mass[flags]) > 0
+knitr::kable(p_mass[selected,
+  c("row_id", "species", "sex", "body_mass_g", flags)], row.names = FALSE)
+```
+
+**Interpretation and discussion**
+
+Gentoo penguins are generally heavier, and males generally have higher mass within species. The within-species–sex comparison describes a more homogeneous reference group.
+
+The table reports the actual flag counts; there is no requirement that they decrease after stratification. A narrower within-group distribution can reveal a relatively unusual observation that the pooled rule misses. Pooling can also label members of a smaller group as extreme. These are descriptive flags based on estimated quartiles, not diagnoses of recording errors. Small groups make the estimated fences less stable.
+
+# 3. KDE: bandwidth and population mixtures
+
+Using `p_mass`, compute `h <- bw.nrd0(p_mass$body_mass_g)`. Compare pooled KDEs using bandwidths `h/2`, `h` and `2*h`. Keep the observations fixed and use the same plotting range.
+
+Next plot species-specific KDEs with the same numerical bandwidth `h`. State the units of density. Does a taller curve necessarily identify a species with more observations? Explain why the number of visible peaks need not equal the number of species.
+
+Write the relationship between the pooled density and the conditional densities using the sample species proportions. Explain what changes if you give the species equal weights.
+
+```{r answer-3}
+h <- bw.nrd0(p_mass$body_mass_g)
+bw_values <- c(h / 2, h, 2 * h)
+grid_limits <- range(p_mass$body_mass_g) + c(-1, 1) * 3 * max(bw_values)
+curves <- do.call(rbind, lapply(seq_along(bw_values), function(i) {
+  z <- density(p_mass$body_mass_g, bw = bw_values[i],
+               from = grid_limits[1], to = grid_limits[2], n = 512)
+  data.frame(mass = z$x, density = z$y,
+             bandwidth = c("h/2", "h", "2h")[i])
+}))
+ggplot(curves, aes(mass, density, colour = bandwidth)) + geom_line() +
+  scale_colour_manual(values = c("h/2" = "#D55E00", h = "#0072B2", "2h" = "#009E73")) +
+  labs(x = "Body mass (g)", y = "Density (1/g)",
+       subtitle = paste("Reference bandwidth:", round(h, 1), "g"))
+
+ggplot(p_mass, aes(body_mass_g, colour = species)) +
+  geom_density(bw = h) + scale_colour_manual(values = species_colours) +
+  labs(x = "Body mass (g)", y = "Within-species density (1/g)")
+knitr::kable(as.data.frame(prop.table(table(p_mass$species))),
+             col.names = c("Species", "Sample proportion"), digits = 3)
+```
+
+**Interpretation and discussion**
+
+The smaller bandwidth follows finer sample variation; the larger bandwidth smooths it away and may merge features. Neither the species count nor a chosen bandwidth supplies a known true number of modes. Species overlap, and sex adds variation within species.
+
+Each conditional density has total area one: a taller peak indicates greater local concentration, not a larger species count. With common bandwidth $h$, the pooled Gaussian KDE satisfies
+
+$$\widehat f_h(y)=\sum_s \frac{n_s}{n}\widehat f_h(y\mid S=s).$$
+
+Separate automatic bandwidths generally destroy this exact KDE identity. Equal weighting would describe a hypothetical population with one-third of its members in each species, rather than the observed sample composition. KDE heights are probability per gram; probabilities are represented by areas.
+
+# 4. The same scatterplot, with and without species
+
+Plot bill depth against bill length using `p_bill`. First show all points in one colour. Then colour and shape the points by species. Finally make one panel per species, using the same axis limits in all panels. Do not add fitted lines or smoothers.
+
+Describe the direction of the overall point cloud and the direction within each species. Compare the locations of the species clusters with their internal patterns. Can both descriptions be correct?
+
+Calculate Pearson's correlation between bill length and bill depth for the pooled sample and separately for each species, using `cor()`. Report the number of complete pairs alongside each correlation. Use the same `p_bill` rows for the pooled and within-species analyses.
+
+Compare the signs and absolute values of the correlations and relate them to the scatterplots. Does the pooled correlation describe the relationship within each species? Explain what a correlation close to zero would mean for a linear association, and why it would not exclude a non-linear relationship. Use descriptive statements about these observations; no tests, p-values or confidence intervals are requested.
+
+```{r answer-4}
+x_limits <- range(p_bill$bill_length_mm)
+y_limits <- range(p_bill$bill_depth_mm)
+ggplot(p_bill, aes(bill_length_mm, bill_depth_mm)) +
+  geom_point(alpha = 0.5) +
+  coord_cartesian(xlim = x_limits, ylim = y_limits) +
+  labs(x = "Bill length (mm)", y = "Bill depth (mm)", title = "Pooled sample")
+ggplot(p_bill, aes(bill_length_mm, bill_depth_mm, colour = species, shape = species)) +
+  geom_point(alpha = 0.7) + scale_colour_manual(values = species_colours) +
+  coord_cartesian(xlim = x_limits, ylim = y_limits) +
+  labs(x = "Bill length (mm)", y = "Bill depth (mm)")
+ggplot(p_bill, aes(bill_length_mm, bill_depth_mm, colour = species)) +
+  geom_point(alpha = 0.7) + facet_wrap(~ species) +
+  scale_colour_manual(values = species_colours) +
+  coord_cartesian(xlim = x_limits, ylim = y_limits) +
+  labs(x = "Bill length (mm)", y = "Bill depth (mm)") + guides(colour = "none")
+```
+
+**Descriptive comparison of correlations**
+
+```{r descriptive-correlations}
+groups <- c(list(Pooled = p_bill), split(p_bill, p_bill$species))
+correlation_table <- do.call(rbind, lapply(names(groups), function(g) {
+  z <- groups[[g]]
+  data.frame(group = g, n = nrow(z),
+    correlation = cor(z$bill_length_mm, z$bill_depth_mm, method = "pearson"))
+}))
+knitr::kable(correlation_table, digits = 3, row.names = FALSE)
+```
+
+**Interpretation and discussion**
+
+The pooled correlation is negative, while all three within-species correlations are positive. Their exact values and sample sizes appear in the table. The sign describes direction and the absolute value describes the strength of the linear association in the specified group. These are descriptions of the observed data, not statements about statistical significance. A correlation near zero indicates a weak linear association, but it can coexist with a clear non-linear pattern; always inspect the scatterplot. Comparing the species' locations answers a different question from comparing individuals within a species. In particular, Gentoo combines relatively long bills with relatively small bill depths, pulling the overall pattern in a different direction from the within-species patterns.
+
+This is Simpson's paradox, documented by the dataset authors. There is no contradiction: the overall cloud combines between-species and within-species variation. Colours and facets reveal the grouping without a fitted model. The observations do not establish that changing bill length would cause bill depth to change.
+
+# 5. Compare islands within more comparable groups
+
+**Question:** Do differences in body mass between islands necessarily describe an island effect?
+
+Use `p_mass`, retaining rows with known island, to create `p_island`. Report how many rows are retained. Make a boxplot of mass by island, overlaying points coloured by species. Tabulate the species composition of each island as proportions within island.
+
+Next restrict the comparison to Adelie penguins, which are observed on all three islands. Plot body mass by island again. Finally compare the islands separately within female and male Adelie penguins, showing subgroup sizes and using a common vertical scale.
+
+Describe which comparisons changed when you held species and then sex fixed. Why can you not repeat the three-island comparison for every species? Can these plots establish a causal effect of island?
+
+```{r answer-5}
+p_island <- p_mass[!is.na(p_mass$island), ]
+knitr::kable(data.frame(sample = c("Mass/species/sex", "Also known island"),
+  n = c(nrow(p_mass), nrow(p_island))))
+composition <- prop.table(table(p_island$species, p_island$island), margin = 2)
+knitr::kable(composition, digits = 3,
+  caption = "Species proportions within each island (each column sums to one)")
+mass_limits <- range(p_island$body_mass_g)
+ggplot(p_island, aes(island, body_mass_g)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(aes(colour = species),
+    position = position_jitter(width = 0.12, height = 0, seed = 103), alpha = 0.6) +
+  scale_colour_manual(values = species_colours) +
+  coord_cartesian(ylim = mass_limits) + labs(x = "Island", y = "Body mass (g)")
+
+adelie <- subset(p_island, species == "Adelie")
+ggplot(adelie, aes(island, body_mass_g)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.12, height = 0, seed = 104),
+             alpha = 0.5, colour = species_colours["Adelie"]) +
+  coord_cartesian(ylim = mass_limits) +
+  labs(x = "Island", y = "Body mass (g)", title = "Adelie penguins only")
+table(adelie$island, adelie$sex)
+ggplot(adelie, aes(island, body_mass_g, colour = sex)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.12, height = 0, seed = 105),
+             alpha = 0.6) + facet_wrap(~ sex) +
+  scale_colour_manual(values = c(female = "#CC79A7", male = "#0072B2")) +
+  coord_cartesian(ylim = mass_limits) +
+  labs(x = "Island", y = "Body mass (g)", title = "Adelie, comparing like-sex groups") +
+  guides(colour = "none")
+```
+
+**Interpretation and discussion**
+
+The overall island distributions mix different species in different proportions. Biscoe includes Gentoo penguins, which are generally heavier; an overall comparison with the other islands therefore combines species composition with any within-species differences. The composition table makes this explicit.
+
+Restricting to Adelie creates a comparison of one species across islands. Splitting again by sex makes the reference groups more comparable, but smaller. Read the observed medians, spreads and overlap from the plots; stratification need not eliminate every difference or produce a particular ordering.
+
+Gentoo and Chinstrap are each observed on only one island in this dataset, so their three-island comparisons are unsupported. The data cannot separate every species–island contrast. These descriptive comparisons illustrate how potential confounders and group composition affect interpretation. Remaining differences are not proof of a causal island effect: other factors and the sampling process can still matter.
+
+# 6. Explain what conditioning changes
+
+Choose three figures from your analysis and write a short explanation for another student. Your explanation should connect:
+
+1. How the chosen reference group affects a boxplot flag.
+2. How bandwidth and group composition affect the shape of a KDE.
+3. How the pooled correlation differs from the correlations within species, and how overall island comparisons differ from comparisons within species and sex. Refer to the observed correlation values and their signs.
+
+Finish with one conclusion supported by the plots and one causal conclusion that they do not justify. No new calculation or statistical model is required.
+
+**Interpretation and discussion**
+
+A possible synthesis is: “A distribution describes a specified collection of observations. Pooling species and sexes changes its spread and can change which observations are flagged. Smoothing controls which features of a sample are visible, while stratification helps explain their possible origins. The pooled bill association has a different sign from the within-species associations, and island mass distributions reflect different species compositions. We therefore need to state which groups are being compared before interpreting a pattern.”
+
+A supported conclusion is that the bill association changes when species is considered. An unsupported conclusion is that increasing an individual penguin's bill length would cause a change in bill depth, or that moving it to another island would cause the observed island mass difference. Graphical conditioning improves the comparison; it does not by itself identify a causal effect.
+
+# 7. Optional: bivariate KDE
+
+Overlay bivariate density contours on the bill scatterplot. Compare one pooled KDE with species-specific KDEs. Use the same bandwidth settings and coordinate limits in both plots. Investigate whether the pooled contours conceal the within-species orientation.
+
+Explain what a contour of constant estimated density represents. Does a contour height directly give the proportion of observations inside it? Can the number of visible peaks alone identify the number of species?
+
+```{r answer-7}
+# h is passed to MASS::kde2d() by ggplot2; keep it fixed across groups.
+h2 <- c(8, 3)
+x_limits <- range(p_bill$bill_length_mm)
+y_limits <- range(p_bill$bill_depth_mm)
+ggplot(p_bill, aes(bill_length_mm, bill_depth_mm)) +
+  geom_point(alpha = 0.2) + geom_density_2d(h = h2, bins = 5) +
+  coord_cartesian(xlim = x_limits, ylim = y_limits) +
+  labs(x = "Bill length (mm)", y = "Bill depth (mm)", title = "Pooled density")
+ggplot(p_bill, aes(bill_length_mm, bill_depth_mm, colour = species)) +
+  geom_point(alpha = 0.25) + geom_density_2d(h = h2, bins = 5) +
+  scale_colour_manual(values = species_colours) +
+  coord_cartesian(xlim = x_limits, ylim = y_limits) +
+  labs(x = "Bill length (mm)", y = "Bill depth (mm)", title = "Conditional densities")
+```
+
+**Interpretation and discussion**
+
+The pooled contours describe a mixture, while each species-specific KDE describes a conditional distribution. Their geometry can therefore differ even with common smoothing settings. The defaults use axis-aligned Gaussian kernels, which need not match the orientation of the cloud.
+
+The contour values are density heights: points along a contour have the same estimated density. The height is not the proportion of observations inside the contour; probability is represented by density integrated over an area. Overlap between groups and the chosen smoothing settings can merge or reveal peaks, so their number alone does not identify the number of species.
+
+# Looking ahead: from simple to multiple linear regression
+
+**Remark — connecting with what you already know.** You have studied simple linear regression. Here we describe the direction and strength of linear associations using Pearson correlations and scatterplots. Later, multiple linear regression will allow you to consider several variables together and handle continuous covariates without dividing them into many small groups. The comparisons within species and sex provide a graphical introduction to that idea; no multiple regression is needed in this activity.
+
+# Submission and reflection
+
+Submit the completed Rmd and its rendered HTML. Include the requested analyses, readable figures and a short final answer to the main question. Explain one conclusion that changes when you condition on another variable, and one conclusion that the data do not justify. Label the optional extension separately.
+
+# Reproducibility
+
+```{r session-info}
+sessionInfo()
+```
+
+# Data and references
+
+- Horst, A. M., Hill, A. P., & Gorman, K. B. (2022). *Palmer Archipelago Penguins Data in the palmerpenguins R Package — An Alternative to Anderson's Irises*. [The R Journal](https://rjournal.github.io/articles/RJ-2022-020/).
+- [Dataset documentation and provenance](https://allisonhorst.github.io/palmerpenguins/). Data are available under CC0. Original field data were collected by Kristen Gorman and the Palmer Station Long Term Ecological Research programme. This activity uses a CSV copy of the curated `penguins` dataset, retaining its original variable names. Providing a CSV changes the access method, not the source of the data; no installation of `palmerpenguins` is needed.
+- [Univariate KDE in ggplot2](https://ggplot2.tidyverse.org/reference/geom_density.html) and [bivariate density contours](https://ggplot2.tidyverse.org/reference/geom_density_2d.html).

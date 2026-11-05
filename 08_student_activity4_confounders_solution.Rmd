@@ -1,0 +1,515 @@
+---
+title: "Student Activity 4 — Feedback and Worked Solution"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization · Commentary on the Group Activity"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    self_contained: true
+    fig_caption: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = TRUE,
+                     fig.width = 8, fig.height = 5, fig.align = "center")
+library(ggplot2)
+theme_set(theme_minimal(base_size = 12))
+year_levels <- c("Year 1", "Year 3", "Year 5")
+year_colours <- c("Year 1" = "#0072B2", "Year 3" = "#D55E00",
+                 "Year 5" = "#009E73")
+year_shapes <- c("Year 1" = 16, "Year 3" = 17, "Year 5" = 15)
+```
+
+# How to use this solution
+
+**Instructor copy — release after the group activity.** Distribute the student
+handout and CSV first. Keep this solution and the data-generation script
+separate until students have submitted their interpretation. For the initial
+planning discussion, reveal only Part 1 of the handout.
+
+This document provides one worked approach and general feedback. It is not
+an assessment of individual submissions. Compare your original study proposal
+with the choices below and explain any revisions. Other well-justified designs
+and clear visualizations are acceptable.
+
+# Part 1: A reasonable study proposal
+
+The descriptive question is whether children with larger shoe sizes have
+higher scores on a common reading assessment. A separate question asks
+whether this relationship remains among children in the same school year.
+Neither question is the causal effect of changing a child's shoes.
+
+Define the target population, for example children in Years 1, 3, and 5
+in a specified school district. A feasible proposal would sample children
+within each year, using a sampling frame rather than only volunteers who
+find reading easy. Obtain school and guardian permission and the child's
+assent, and store anonymous identifiers. Standardise the sizing procedure
+and use the same reading assessment and instructions for every child.
+One row represents one child measured once.
+
+A possible planning target is 100 children per year, 300 in total. This is
+a practical teaching choice, not an established optimal sample size or a
+power calculation. More children in each year improve the precision of its
+correlation and slope; a large pooled sample cannot compensate for a nearly
+empty stratum. In a real study, justify the target using desired precision,
+a pilot study, recruitment constraints, and the variation in shoe sizes
+expected within each year. Sampling multiple schools also requires attention
+to clustering in any later inferential analysis.
+
+School year is a plausible categorical background variable because it
+represents differences in developmental stage and schooling. Other
+categorical variables could be considered only with a substantive rationale;
+a long list of factors is not automatically a sound adjustment strategy.
+The supplied exercise includes **one categorical confounder** and three
+additional categorical variables for comparison. These additional variables
+are unrelated to school year by construction; their role should be revealed
+only after students have explored the data.
+
+Plan overall and within-year summaries, a pooled scatterplot, a grouped
+scatterplot, and panels with common axes. Calculate Pearson correlations and
+fit separate simple regressions. Check missingness, identifiers, ranges,
+group sizes, and whether the observed shoe-size ranges overlap. Keep the
+original proposal when revising the analysis.
+
+# Part 2: A worked analysis
+
+## Read and validate the fixed input
+
+The solution reads the same CSV as students. It does not silently regenerate
+or substitute observations. Install `ggplot2`, `knitr`, and `rmarkdown`
+once if needed.
+
+```{r input}
+data_file <- "data/shoe_size_reading.csv"
+if (!file.exists(data_file)) stop("Missing file: ", data_file)
+dat <- read.csv(data_file, stringsAsFactors = FALSE)
+other_categories <- c("handedness", "favourite_colour", "birth_season")
+category_levels <- list(
+  handedness = c("Left", "Right"),
+  favourite_colour = c("Blue", "Green", "Red", "Yellow"),
+  birth_season = c("Winter", "Spring", "Summer", "Autumn")
+)
+required <- c("child_id", "shoe_size", "reading_score", "school_year",
+              other_categories)
+stopifnot(identical(names(dat), required),
+          nrow(dat) == 300L,
+          !anyNA(dat),
+          !anyDuplicated(dat$child_id),
+          all(nzchar(dat$child_id)),
+          all(dat$school_year %in% year_levels),
+          is.numeric(dat$shoe_size),
+          is.numeric(dat$reading_score),
+          all(is.finite(dat$shoe_size)),
+          all(is.finite(dat$reading_score)),
+          all(dat$shoe_size > 0),
+          all(dat$shoe_size * 2 == round(dat$shoe_size * 2)),
+          all(dat$reading_score >= 0 & dat$reading_score <= 100))
+dat$school_year <- factor(dat$school_year, levels = year_levels)
+for (v in other_categories) {
+  stopifnot(all(dat[[v]] %in% category_levels[[v]]))
+  dat[[v]] <- factor(dat[[v]], levels = category_levels[[v]])
+}
+by_year <- split(dat, dat$school_year)
+stopifnot(all(table(dat$school_year) == 100L))
+knitr::kable(data.frame(
+  School_year = year_levels,
+  Children = as.integer(table(dat$school_year))
+))
+colSums(is.na(dat))
+```
+
+There are 300 unique fictional children, 100 per school year, with no missing
+measurements. No observations are excluded. Half-size steps produce vertical
+stacks in scatterplots; transparency makes overlap visible without changing
+the measured coordinates.
+
+## Summarise the distributions
+
+```{r descriptive-summary}
+describe <- function(d, label) {
+  data.frame(
+    Group = label, n = nrow(d),
+    Mean_shoe = mean(d$shoe_size), SD_shoe = sd(d$shoe_size),
+    Min_shoe = min(d$shoe_size), Max_shoe = max(d$shoe_size),
+    Mean_reading = mean(d$reading_score), SD_reading = sd(d$reading_score),
+    Min_reading = min(d$reading_score), Max_reading = max(d$reading_score)
+  )
+}
+descriptive <- do.call(rbind, c(
+  list(describe(dat, "All children")),
+  lapply(year_levels, function(g) describe(by_year[[g]], g))
+))
+knitr::kable(descriptive, digits = 2, row.names = FALSE)
+```
+
+Both average shoe size and average reading score increase across school years.
+The observed shoe-size ranges overlap, but children at the extremes are not
+equally represented in every year. Comparisons at a common shoe size must
+respect those ranges.
+
+```{r distributions, fig.width=9, fig.height=4.5, fig.cap="Distribution summaries and individual observations within each school year."}
+local({
+  old <- par(mfrow = c(1, 2), mar = c(4, 4, 1, 1))
+  on.exit(par(old))
+  set.seed(808) # Jitter changes only horizontal display positions.
+  boxplot(shoe_size ~ school_year, dat, outline = FALSE, col = "grey95",
+          xlab = "School year", ylab = "Shoe size (European scale)",
+          ylim = range(dat$shoe_size))
+  stripchart(shoe_size ~ school_year, dat, method = "jitter", add = TRUE,
+             vertical = TRUE, pch = 16, cex = 0.5,
+             col = adjustcolor("grey30", alpha.f = 0.4))
+  boxplot(reading_score ~ school_year, dat, outline = FALSE, col = "grey95",
+          xlab = "School year", ylab = "Reading score (points)",
+          ylim = range(dat$reading_score))
+  stripchart(reading_score ~ school_year, dat, method = "jitter", add = TRUE,
+             vertical = TRUE, pch = 16, cex = 0.5,
+             col = adjustcolor("grey30", alpha.f = 0.4))
+})
+```
+
+## The pooled association
+
+```{r pooled-fit}
+pooled_fit <- lm(reading_score ~ shoe_size, data = dat)
+pooled_r <- cor(dat$shoe_size, dat$reading_score)
+pooled_slope <- unname(coef(pooled_fit)[2])
+pooled_r
+coef(pooled_fit)
+```
+
+```{r pooled-plot, fig.cap="Ignoring school year gives a clear positive linear association."}
+pooled_plot <- ggplot(dat, aes(shoe_size, reading_score)) +
+  geom_point(alpha = 0.45) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+              colour = "black", linewidth = 0.9) +
+  labs(x = "Shoe size (European scale)", y = "Reading score (points)",
+       title = "All children pooled (n = 300)")
+pooled_plot
+```
+
+The pooled correlation is **`r sprintf("%.3f", pooled_r)`**. The slope is
+**`r sprintf("%.2f", pooled_slope)` reading-score points per shoe-size unit**.
+This is a strong positive association across the pooled children. It does
+not show that larger shoes improve reading or describe the change that would
+follow from increasing an individual child's shoe size. The intercept at
+shoe size zero has no useful interpretation here.
+
+## Within-year associations
+
+```{r separate-models}
+fits <- lapply(by_year, function(d) lm(reading_score ~ shoe_size, data = d))
+association <- function(d, label) {
+  fit <- lm(reading_score ~ shoe_size, data = d)
+  data.frame(Group = label, n = nrow(d),
+             Correlation = cor(d$shoe_size, d$reading_score),
+             Slope = unname(coef(fit)[2]))
+}
+comparison <- do.call(rbind, c(
+  list(association(dat, "All children")),
+  lapply(year_levels, function(g) association(by_year[[g]], g))
+))
+knitr::kable(comparison, digits = 3, row.names = FALSE,
+             caption = "Slopes are reading-score points per shoe-size unit.")
+```
+
+```{r grouped-plot, fig.cap="The dashed pooled line spans differences between years; solid lines describe separate within-year fits."}
+grouped_plot <- ggplot(dat, aes(shoe_size, reading_score)) +
+  geom_abline(intercept = coef(pooled_fit)[1], slope = pooled_slope,
+              linetype = "dashed", colour = "grey35") +
+  geom_point(aes(colour = school_year, shape = school_year),
+             alpha = 0.6, size = 1.8) +
+  geom_smooth(aes(colour = school_year), method = "lm", formula = y ~ x,
+              se = FALSE, fullrange = FALSE, linewidth = 0.9) +
+  scale_colour_manual(values = year_colours, name = "School year") +
+  scale_shape_manual(values = year_shapes, name = "School year") +
+  labs(x = "Shoe size (European scale)", y = "Reading score (points)",
+       title = "Compare the pooled line with separate within-year lines")
+grouped_plot
+```
+
+```{r panels, fig.width=10, fig.height=4, fig.cap="All panels share axis limits. Fitted lines stop at each year's observed shoe-size range."}
+panel_labels <- setNames(paste0(year_levels, " (n = 100)"), year_levels)
+faceted_plot <- ggplot(dat, aes(shoe_size, reading_score)) +
+  geom_point(aes(colour = school_year, shape = school_year),
+             alpha = 0.6, size = 1.7) +
+  geom_smooth(aes(colour = school_year), method = "lm", formula = y ~ x,
+              se = FALSE, fullrange = FALSE, linewidth = 0.9) +
+  facet_wrap(~ school_year, scales = "fixed",
+             labeller = as_labeller(panel_labels)) +
+  scale_colour_manual(values = year_colours) +
+  scale_shape_manual(values = year_shapes) +
+  coord_cartesian(xlim = range(dat$shoe_size),
+                  ylim = range(dat$reading_score)) +
+  labs(x = "Shoe size (European scale)", y = "Reading score (points)") +
+  theme(legend.position = "none")
+faceted_plot
+```
+
+Within-year correlations range from
+**`r sprintf("%.3f", min(comparison$Correlation[-1]))`** to
+**`r sprintf("%.3f", max(comparison$Correlation[-1]))`**.
+The slopes are small compared with the pooled slope, and the panels show
+no clear linear trend. The strong pooled association therefore disappears
+as a substantial linear relationship when we compare children within years.
+The estimated within-year correlations are close to zero, not exactly zero.
+
+School year separates groups with different typical shoe sizes and reading
+scores. The pooled line connects these groups; it does not represent their
+internal relationships. A near-zero Pearson correlation alone does not rule
+out a nonlinear relationship or prove independence. Here the plots agree
+with the weak within-year linear associations.
+
+## Compare the other categorical variables
+
+The handout asks students to explore these variables before revealing the
+within-year contrast. This worked solution places the comparisons together
+so their different roles are easy to assess.
+
+### Category composition across school years
+
+```{r category-balance}
+balance_tables <- lapply(other_categories, function(v) {
+  counts <- table(dat$school_year, dat[[v]])
+  proportions <- prop.table(counts, margin = 1)
+  # Exact equality across school years, not a non-significant test result.
+  stopifnot(all(apply(proportions, 2, function(p) max(p) - min(p)) == 0))
+  data.frame(
+    Variable = v, Category = colnames(counts),
+    Total_n = as.integer(colSums(counts)),
+    Year_1_percent = 100 * proportions["Year 1", ],
+    Year_3_percent = 100 * proportions["Year 3", ],
+    Year_5_percent = 100 * proportions["Year 5", ], row.names = NULL
+  )
+})
+balance <- do.call(rbind, balance_tables)
+knitr::kable(balance, digits = 0, row.names = FALSE,
+             caption = "Category percentages within each school year.")
+```
+
+Every year has 10% left-handed and 90% right-handed children, 25% in each
+favourite-colour category, and 25% in each birth-season category. Thus each
+additional variable is exactly independent of school year in this dataset.
+This balance was imposed for teaching; a real survey would rarely have such
+identical proportions. Independence from school year alone does not prove
+that a variable is unrelated to either measurement, so inspect those too.
+
+### Measurements and associations within each category
+
+```{r category-associations}
+category_results <- do.call(rbind, lapply(other_categories, function(v) {
+  do.call(rbind, lapply(levels(dat[[v]]), function(label) {
+    d <- dat[dat[[v]] == label, ]
+    result <- association(d, label)
+    data.frame(Variable = v, Category = result$Group, n = result$n,
+               Mean_shoe = mean(d$shoe_size),
+               Mean_reading = mean(d$reading_score),
+               Correlation = result$Correlation, Slope = result$Slope)
+  }))
+}))
+knitr::kable(category_results, digits = 3, row.names = FALSE)
+```
+
+The shoe-size/reading correlations within these categories range from
+**`r sprintf("%.3f", min(category_results$Correlation))`** to
+**`r sprintf("%.3f", max(category_results$Correlation))`**. The strong
+positive relationship remains. Each category still mixes children from
+all three school years, in the same proportions as the full dataset.
+Splitting by these variables therefore leaves the between-year explanation
+in place. By contrast, splitting by school year removes that mixture and
+reveals the weak within-year associations.
+
+Small differences in category means arise from the random assignments.
+The additional categories were assigned independently of both quantitative
+draws; the mechanism contains no effect of handedness, favourite colour,
+or birth season on either measurement. This is a simulation assumption,
+not a claim that these characteristics are irrelevant in real children.
+
+```{r category-plot-helper}
+comparison_plot <- function(variable) {
+  plot_data <- dat
+  plot_data$Category <- plot_data[[variable]]
+  ggplot(plot_data, aes(shoe_size, reading_score)) +
+    geom_point(aes(colour = school_year, shape = school_year),
+               alpha = 0.55, size = 1.6) +
+    geom_smooth(method = "lm", formula = y ~ x, se = FALSE,
+                fullrange = FALSE, colour = "black", linewidth = 0.8) +
+    facet_wrap(~ Category, nrow = 1, scales = "fixed") +
+    scale_colour_manual(values = year_colours, name = "School year") +
+    scale_shape_manual(values = year_shapes, name = "School year") +
+    coord_cartesian(xlim = range(dat$shoe_size),
+                    ylim = range(dat$reading_score)) +
+    labs(x = "Shoe size (European scale)", y = "Reading score (points)") +
+    theme(legend.position = "bottom")
+}
+comparison_plots <- setNames(lapply(other_categories, comparison_plot),
+                            other_categories)
+```
+
+```{r handedness-panels, fig.width=9, fig.height=4.5, fig.cap="Grouping by handedness retains the mixture of school years and the positive association."}
+comparison_plots$handedness
+```
+
+```{r colour-panels, fig.width=10, fig.height=4, fig.cap="Favourite-colour panels all retain the positive association. Colours and symbols of the points identify school year."}
+comparison_plots$favourite_colour
+```
+
+```{r season-panels, fig.width=10, fig.height=4, fig.cap="Birth-season panels also retain the positive association, with common axes."}
+comparison_plots$birth_season
+```
+
+The left-handed group contains 30 children, compared with 270 in the
+right-handed group; the other categories contain 75 each. Smaller groups
+give less stable summaries. Splitting simultaneously by school year and
+several other variables can create very small cells, so it is not required.
+These comparisons do not justify a rule that a variable is a confounder
+only if adjustment reduces a correlation. A study explanation and the
+relationships among variables matter as well.
+
+## Verify one calculation independently
+
+```{r independent-check}
+d <- by_year[["Year 1"]]
+dx <- d$shoe_size - mean(d$shoe_size)
+dy <- d$reading_score - mean(d$reading_score)
+manual_r <- sum(dx * dy) / sqrt(sum(dx^2) * sum(dy^2))
+manual_slope <- sum(dx * dy) / sum(dx^2)
+stopifnot(
+  isTRUE(all.equal(manual_r, comparison$Correlation[2])),
+  isTRUE(all.equal(manual_slope, comparison$Slope[2]))
+)
+data.frame(Year = "Year 1", Correlation = manual_r, Slope = manual_slope)
+# Checks of the intended teaching contrast, not significance tests:
+stopifnot(pooled_r > 0.65,
+          all(abs(comparison$Correlation[-1]) < 0.15),
+          all(abs(comparison$Slope[-1]) < 0.6),
+          all(category_results$Correlation > 0.6))
+```
+
+# Explain the result and revise the design
+
+In the simplified teaching model, school year shifts both measurements:
+
+- School year → typical shoe size.
+- School year → typical reading score.
+- No arrow from shoe size to reading score is used to generate the data.
+
+In real children, school year reflects maturation and time in education;
+the administrative label itself does not cause feet to grow. Stratifying
+by year makes children more comparable but cannot guarantee that all
+developmental or social differences have been removed.
+
+A suitable final conclusion is:
+
+> Children with larger shoe sizes tend to score higher when all years are
+> pooled. Within each school year, shoe size has little linear association
+> with reading score. Differences between school years account for the
+> strong pooled pattern in this simulated dataset. These observations do
+> not support a claim that increasing shoe size would improve reading.
+
+Revise the study to recruit adequate numbers within each planned year,
+use comparable measurements, and report within-year results alongside pooled
+results. State the target population and recruitment limitations. A pooled
+predictive relationship can also fail when the mixture of school years
+changes. Further background variables should be chosen from a plausible
+study explanation rather than by searching for factors that erase a result.
+
+Common issues to discuss in feedback:
+
+| Issue | Useful correction |
+|:--|:--|
+| Only a pooled correlation is reported | Add within-year correlations, slopes, and plots. |
+| Every recorded category is called a confounder | Compare year composition and measurements, and give a plausible study explanation. |
+| School year is entered as 1, 3, 5 in a regression | Use categories and separate simple regressions for this activity. |
+| Every panel has different axes | Use common axes to make slope and spread comparisons meaningful. |
+| A small correlation is called exactly zero | Describe its magnitude; do not claim proven independence. |
+| A p-value above 0.05 is called proof of no effect | Discuss effect sizes and scatterplots; this exercise does not require tests. |
+| The example is called a sign reversal | The main contrast is disappearance of the pooled trend, not a consistent reversal. |
+| A new simulation is substituted for the CSV | Analyse the shared fixed dataset so group results are comparable. |
+
+# Instructor notes: data choice and simulation
+
+## Real data considered first
+
+A targeted search did not identify a verified, simple real dataset of two
+quantitative measurements whose strong association vanishes within all
+categories of a suitable confounder. This is a limited search, not a claim
+that no such data exist.
+
+Two accessible real-data candidates were checked:
+
+- [UC Berkeley admissions, R datasets documentation](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/UCBAdmissions.html):
+  real admissions counts classified by recorded sex and department. This
+  is useful for categorical association, but it does not provide two
+  quantitative variables for the planned scatterplots and simple regressions.
+- [Iris measurements, R datasets documentation](https://stat.ethz.ch/R-manual/R-devel/library/datasets/html/iris.html):
+  real quantitative measurements with species as a categorical grouping
+  variable. For the natural petal-length/petal-width example, positive
+  associations remain within species, so it does not give the requested
+  disappearance. The calculation below documents that check.
+
+```{r real-candidate-check}
+iris_check <- rbind(
+  data.frame(Group = "All species",
+             Correlation = cor(iris$Petal.Length, iris$Petal.Width)),
+  do.call(rbind, lapply(split(iris, iris$Species), function(d)
+    data.frame(Group = as.character(d$Species[1]),
+               Correlation = cor(d$Petal.Length, d$Petal.Width))))
+)
+knitr::kable(iris_check, digits = 3, row.names = FALSE)
+```
+
+The shoe-size/reading example is therefore simulated and explicitly labelled
+throughout. Its numerical values are chosen for an understandable classroom
+contrast; they are not estimates of real children's development or validated
+reading norms.
+
+## Generating mechanism and reproducibility
+
+The instructor script `data/08_generate_shoe_size_reading.R` uses seed 804,
+100 children in each year, and independent normal draws within each year:
+
+| School year | Mean shoe size | Shoe-size SD | Mean reading score | Reading-score SD |
+|:--|--:|--:|--:|--:|
+| Year 1 | 29 | 1.8 | 35 | 7 |
+| Year 3 | 32 | 1.8 | 55 | 7 |
+| Year 5 | 35 | 1.8 | 75 | 7 |
+
+Shoe sizes are rounded to the nearest half unit and scores to integers.
+The script checks that all resulting scores are within 0–100; it does not
+clip, remove, or redraw observations. Random draws of the two measurements
+are independent within each year, including after separate rounding.
+Sampling variation gives the small nonzero observed correlations.
+
+After generating the quantitative measurements, seed 805 assigns the three
+additional categorical variables by random permutations within each school
+year: 90 Right and 10 Left labels, 25 labels of each favourite colour,
+and 25 labels of each birth season. Assignments use no shoe sizes or reading
+scores. Each variable is exactly balanced across years; neither exact
+balance between the additional variables nor exactly equal measurement
+means across their categories is imposed. The original child identifiers,
+shoe sizes, reading scores, and school years are unchanged.
+
+To regenerate the CSV deliberately, run the following from
+`didactic_materials`. It overwrites the shared CSV, so this code is
+**not evaluated when knitting this solution**.
+
+```{r regenerate-data, eval=FALSE}
+source("data/08_generate_shoe_size_reading.R")
+```
+
+The supplied CSV should be used for teaching even if a future R version or
+random-number configuration produces different draws. It is the common
+reference for students and this solution.
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

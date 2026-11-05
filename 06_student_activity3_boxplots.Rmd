@@ -1,7 +1,7 @@
 ---
-title: 'Student activity 3: unusual compared with what?'
-author: 'Group members: replace with your names'
-subtitle: Boxplots, regression residuals and influential observations
+title: 'Student activity 3: unusual compared with what?  Boxplots, regression residuals and influential observations'
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization"
 output:
   pdf_document:
     toc: true

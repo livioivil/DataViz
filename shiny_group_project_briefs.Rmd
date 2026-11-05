@@ -1,0 +1,218 @@
+---
+title: "Data Visualization: Shiny Group Projects. Investigate through interactive visualization"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization"
+
+output:
+  html_document:
+    toc: true
+    toc_depth: 2
+    theme: readable
+    number_sections: false
+    self_contained: true
+lang: en
+---
+
+Choose one of the five projects below and develop a Shiny app that helps its users investigate a statistical question. Your app should connect interaction, visualization and interpretation: users should be able to make a prediction, change a meaningful setting, observe the result and explain what they have learned.
+
+Each brief specifies a **core project** and an **optional extension**. Complete the core before adding features. You may use existing R packages for statistical methods; your contribution is to understand the methods, design informative comparisons and communicate the findings clearly. You are not expected to reproduce every result or implement every algorithm in the reference papers.
+
+**What to submit**
+
+- A working Shiny app, its source code and a README explaining how to run it, its dependencies and its data sources.
+- A short report describing your question, design choices, methods, findings and limitations, with references to the papers and software used.
+- Three reproducible examples for your presentation. For each example, state the question, show the relevant interaction or comparison, and explain the result.
+
+For simulation projects, preserve the current sample when users change an analysis setting; generate a new sample only through an explicit action. Record the seed and settings, and support export of the data or results needed to reproduce an example. For the perception experiment, export the trial data and document the experimental protocol. Label axes and units, explain controls, use readable colours, and keep scales consistent when comparing plots. Include a short guide that helps a first-time user answer the app's main question.
+
+# 1. Unusual compared with what?
+
+*Outliers, skewness and alternatives to the standard boxplot*
+
+**Main question.** When a boxplot flags an observation, what makes that observation unusual? Does the answer change when the distribution is skewed?
+
+A long upper tail can be a regular feature of a distribution. In this project, you will build an app that compares different ways of flagging observations and investigates their behaviour under known data-generating mechanisms.
+
+## Core project
+
+Allow users to generate samples from a normal distribution and from positively skewed distributions, including gamma and chi-squared distributions. Include controls for sample size and distribution parameters.
+
+Compare three rules on the **same observations**:
+
+1. The standard Tukey rule, with fences at $Q_1-1.5\,\mathrm{IQR}$ and $Q_3+1.5\,\mathrm{IQR}$.
+2. The adjusted boxplot of Hubert and Vandervieren, which uses the medcouple to adapt the fences to skewness.
+3. A model-based rule using lower and upper distribution quantiles, with a user-selected total tail probability $\alpha$. Begin with the known parameters of the simulation model.
+
+Display the distribution, the observations and the fences. Make it easy to identify points flagged by one rule but not another. Distinguish a fence from a whisker endpoint: a fence is a threshold; a whisker normally ends at an observed value within the threshold.
+
+Add a simulation panel that repeats the sampling experiment. Report the number and percentage flagged, and the probability that a sample contains at least one flagged observation. Show variability across samples, rather than only an average.
+
+## Investigations to present
+
+- **Skewness without contamination:** how do the three rules behave when every observation comes from the specified distribution?
+- **Increasing sample size:** compare the count flagged, the proportion flagged and the probability of at least one flag. Explain why these summaries answer different questions.
+- **A contaminated sample:** insert observations from a separate, explicitly defined mechanism. Compare the fraction of baseline observations flagged with the fraction of inserted observations detected. Keep the two denominators separate.
+
+For a continuous distribution with known parameters, the quantile rule has the specified population tail probability. The other rules do not share a universal nominal probability across distributions. Explain this difference before comparing their results. A flagged observation is a reason to investigate, not proof of an error or a reason for automatic deletion.
+
+**Optional extension — counts.** Add Poisson samples and investigate ties, small means and zero IQR. Explain why discrete quantile thresholds generally cannot attain an arbitrary tail probability exactly. Alternatively, investigate the effect of estimating the parameters or fitting the wrong model; choose one extension.
+
+**Starting points in R:** `boxplot.stats()`, `robustbase::adjboxStats()`, `robustbase::adjbox()`, and distribution functions such as `qnorm()`, `qgamma()`, `qchisq()` and `qpois()`. Document which quartile or hinge convention you use.
+
+**Main reference:** Hubert, M., & Vandervieren, E. (2008). An adjusted boxplot for skewed distributions. *Computational Statistics & Data Analysis, 52*, 5186–5201. [Paper](https://doi.org/10.1016/j.csda.2007.11.008). Focus on the motivation, the medcouple and the construction of the adjusted fences.
+
+# 2. Ordinary values, unusual combinations
+
+*From marginal boxplots to the bivariate bagplot*
+
+**Main question.** Can an observation look ordinary in each variable separately and still be unusual when the variables are considered together?
+
+Imagine two strongly associated measurements. A particular pair of values can be inconsistent with their relationship even when neither value is extreme on its own. Your app will make this distinction visible and introduce the bagplot as a bivariate extension of the boxplot.
+
+## Core project
+
+Generate bivariate data with controls for sample size, correlation and the relative scales of the two variables. Allow users to add or move a small number of observations. Include at least one asymmetric cloud as a second scenario.
+
+Create linked displays of:
+
+- A scatterplot and a boxplot for each marginal distribution.
+- The observations flagged by applying the univariate rule to either variable.
+- A bagplot based on halfspace depth, showing the centre, central bag, fence, loop and flagged observations.
+
+Explain the bagplot visually. Introduce depth as a way to describe how central a point is relative to the cloud, and distinguish the central bag, the expanded fence and the loop containing observations within the fence. Use an existing implementation; a new computational-geometry algorithm is outside the scope of this project.
+
+Add a rotation control. Apply rotations to the same data and track the identities of flagged observations. Explain why changing the coordinate axes can change marginal classifications, while the theoretical halfspace-depth bagplot is affine equivariant. Numerical approximations may produce small differences near a boundary.
+
+## Investigations to present
+
+- **A hidden joint anomaly:** construct a point that neither marginal boxplot flags but that the bagplot identifies as unusual.
+- **The role of correlation:** keep the candidate point fixed while changing the surrounding relationship. How does its status change?
+- **The role of coordinates:** rotate a cloud and compare the classifications before and after rotation. Distinguish a change in the data's geometry from a change in its representation.
+
+Discuss what happens with asymmetric clouds and with two genuine clusters. A single centre and central region may provide an incomplete description of a population with several groups. Neither marginal fences nor a bagplot provide a universal false-alarm probability.
+
+**Optional extension — covariance-based detection.** Compare the bagplot with Mahalanobis-distance rules using classical and robust estimates of location and covariance. State the assumptions behind any probability threshold; avoid describing an arbitrary ellipse as a confidence region.
+
+**Starting points in R:** `mrfDepth::compBagplot()` with halfspace depth and `mrfDepth::bagplot()`; `aplpack::bagplot()` is another implementation. Inspect the function documentation before deciding how to extract classifications.
+
+**Main reference:** Rousseeuw, P. J., Ruts, I., & Tukey, J. W. (1999). The bagplot: A bivariate boxplot. *The American Statistician, 53*, 382–387. [Paper](https://doi.org/10.1080/00031305.1999.10474494). Focus on the construction and interpretation of the bag, fence and loop.
+
+# 3. How many peaks?
+
+*Kernel density estimation and SiZer*
+
+**Main question.** Which peaks in an estimated density are supported by the data, and which depend on the amount of smoothing?
+
+A small bandwidth can reveal detail and sampling noise; a large bandwidth can merge distinct features. Your app will investigate the distribution across a range of smoothing scales and introduce the SiZer approach of Chaudhuri and Marron.
+
+## Core project
+
+Generate univariate data from a unimodal distribution and from mixtures of normal distributions. Include controls for sample size, component separation and mixture weights. Display the observations, a kernel density estimate and, optionally, the generating density. Include one real-data example, such as the eruption durations in `faithful`.
+
+Provide a bandwidth slider and at least one automatic bandwidth selector. Keep the sample fixed while changing the bandwidth. Show several individual kernel contributions in a teaching view so users can understand how the estimate is constructed.
+
+Add a **SiZer map** with location on the horizontal axis and bandwidth on the vertical axis. Use an established implementation, such as `multimode::sizer()`. Explain its four categories: evidence of an increasing curve, evidence of a decreasing curve, an inconclusive derivative and insufficient local information. Link a selected bandwidth to the corresponding density curve.
+
+Document the significance level and the method used to construct the map. For example, `method = 2` uses an approximate simultaneous calibration over location at each bandwidth; it does not supply simultaneous control over the entire location–bandwidth map. The target is the density at a given smoothing scale, and a non-significant derivative is not evidence that the underlying density is flat.
+
+## Investigations to present
+
+- **Spurious bumps:** generate a small sample from a unimodal distribution. Find bandwidths that produce additional estimated peaks and examine their SiZer evidence.
+- **Merging peaks:** vary component separation and mixture weights. Explain why the number of mixture components need not equal the number of modes of the mixture density.
+- **More information:** compare repeated samples at different sizes. Which features become easier to detect, and at which smoothing scales?
+
+Use the paper to explain why examining several scales can be informative. Distinguish the visual persistence of a bump from the inferential evidence represented in a SiZer map. Your conclusions may be uncertain; the app should communicate that uncertainty.
+
+**Optional extension — a mode tree.** Track estimated mode locations as bandwidth changes and compare the resulting tree with the SiZer map. Explain the extra information each display provides.
+
+**Starting points in R:** `density()`, `bw.nrd0()`, `bw.SJ()`, `multimode::sizer()` and `multimode::modetree()`. Restrict the map to a manageable grid and run expensive calculations through an explicit button.
+
+**Main reference:** Chaudhuri, P., & Marron, J. S. (1999). SiZer for exploration of structures in curves. *Journal of the American Statistical Association, 94*, 807–823. [Paper](https://doi.org/10.1080/01621459.1999.10474186). Focus on the scale-space perspective, the map and its interpretation; reproducing the theoretical derivations is not required.
+
+**Implementation reference:** Ameijeiras-Alonso, J., Crujeiras, R. M., & Rodríguez-Casal, A. (2021). multimode: An R package for mode assessment. *Journal of Statistical Software, 97*(9), 1–32. [Paper and code](https://www.jstatsoft.org/article/view/v097i09). See also the [SiZer function documentation](https://search.r-project.org/CRAN/refmans/multimode/html/sizer.html).
+
+# 4. Smoothing has a direction
+
+*Bandwidth matrices for bivariate kernel density estimation*
+
+**Main question.** When data form an elongated or tilted cloud, should smoothing be the same in every direction?
+
+In two dimensions, bandwidth controls both the amount and the direction of smoothing. Your app will show how the geometry of a kernel affects the estimated density and the features that viewers see.
+
+## Core project
+
+Generate bivariate samples with adjustable correlation, orientation and spread. Include a single elliptical cloud and a mixture with a more complex shape. Keep a view of the generating density available for simulations.
+
+Compare three Gaussian-kernel bandwidth structures:
+
+- **Isotropic:** $H=h^2I$, giving circular kernel contours.
+- **Diagonal:** $H=\operatorname{diag}(h_1^2,h_2^2)$, giving axis-aligned elliptical contours.
+- **Full:** $H=R_\theta\operatorname{diag}(h_1^2,h_2^2)R_\theta^\mathsf{T}$, allowing the ellipses to rotate, where $R_\theta$ is a rotation matrix and both bandwidths are positive.
+
+Display the kernel ellipse next to the estimated density. Use heatmaps and contour plots as the main comparison views, with matched coordinate ranges, aspect ratios and colour scales. Let users adjust the bandwidths and angle, and compare these choices with an automatic full-matrix selector and a diagonal selector.
+
+Explain what a contour represents. If contours enclose a specified proportion of estimated probability mass, distinguish them from confidence regions for an unknown parameter.
+
+## Investigations to present
+
+- **Tilted data:** compare circular, axis-aligned and rotated kernels on an elongated cloud. Which features are blurred or distorted?
+- **Rotating the coordinates:** rotate the same sample, refit the estimates and rotate the results back for comparison. Investigate the consequences of restricting the bandwidth matrix to be diagonal.
+- **Apparent extra peaks:** reproduce or adapt the “dumbbell” example in the `ks` vignette. Compare the estimated features with the known density and investigate their sensitivity to bandwidth and sampling.
+
+Keep the sample fixed in direct method comparisons and repeat selected scenarios to assess sampling variability. Explain why a flexible bandwidth matrix is not a guarantee of a better estimate in every sample. Support a claim of improvement with a stated criterion, such as agreement with known features or a numerical approximation to integrated squared error.
+
+**Optional extension — units and standardization.** Change the units of one variable and investigate standardization. Compare estimates after expressing them in common coordinates, accounting for the density transformation when comparing numerical density values.
+
+**Starting points in R:** `ks::kde()`, `ks::Hpi()` and `ks::Hpi.diag()`. Use existing selectors and construct positive-definite manual matrices through the parameterization above.
+
+**Main reference:** Duong, T. (2007). ks: Kernel density estimation and kernel discriminant analysis for multivariate data in R. *Journal of Statistical Software, 21*(7), 1–16. [Paper and code](https://www.jstatsoft.org/article/view/v021i07). Use the [ks vignette](https://www.mvstat.net/ks/articles/ks.html) for worked examples, including the dumbbell density.
+
+# 5. How accurately can you read a graph?
+
+*A small experiment on graphical perception*
+
+**Main question.** Does the visual encoding of two values affect how accurately people judge their ratio?
+
+Build a Shiny app that both administers a short experiment and displays its results. Your aim is to formulate a hypothesis, collect observations under a clear protocol and assess what the data support.
+
+## Core project
+
+Compare three encodings, for example bars with a common baseline, dots positioned on a common scale and circles whose **areas** represent values. Use the same judgement task in every condition:
+
+> What percentage of the larger value is the smaller value?
+
+For circle displays, make radius proportional to the square root of the value. Keep colours, available space and other presentation choices comparable. Provide the reference origin needed for positional judgements, but omit exact value labels that would turn the task into arithmetic. Vary and balance both ratios and overall magnitudes across conditions.
+
+Use a repeated-measures design: each participant sees all three encodings. A manageable starting design is **24 scored trials**, eight per encoding, preceded by a few practice trials. Balance difficulty across encodings, randomize trial order, and counterbalance stimulus-to-encoding assignments across participants. Avoid showing an identical pair repeatedly in close succession. Give feedback during practice, and withhold correctness feedback during scored trials.
+
+Pilot the app before collecting a small voluntary convenience sample. Use anonymous participant identifiers and explain the task and the data being recorded. Decide and document how to handle incomplete sessions and invalid responses before examining condition differences.
+
+Export a CSV with participant ID, trial order, stimulus ID, encoding, underlying values, true ratio and response. You may also record response time, provided you explain when timing starts and the limitations of browser-based measurements. Keep practice trials identifiable.
+
+## Analysis and presentation
+
+For a response $\hat r$ and true ratio $r$, both expressed as percentages, use $|\hat r-r|$ as the primary error measure, in percentage points. Signed error can reveal systematic over- or underestimation.
+
+- Show the distribution of errors for each encoding and investigate whether difficulty changes with the true ratio.
+- Summarize each participant's performance within each encoding, then plot paired comparisons. Repeated trials from one person are not independent participants.
+- Compare findings with your initial hypothesis and the reference papers. Discuss individual differences, practice, device conditions and the limits of a small convenience sample.
+
+Keep the participant task separate from the results dashboard so earlier results do not influence subsequent judgements. Simulated trial logs can help test the app, but label them clearly and keep them separate from collected responses.
+
+**Optional extension — one additional design factor.** Investigate chart size, gridlines or a brief training intervention. Choose one, state the new hypothesis and adjust the design so its effect can be distinguished from the encoding effect.
+
+**Starting points in R:** Shiny for administering trials, `ggplot2` for stimuli and results, and CSV export for reproducible analysis. A careful descriptive analysis with participant-level comparisons is sufficient for the core project.
+
+**Main references:**
+
+- Cleveland, W. S., & McGill, R. (1984). Graphical perception: Theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association, 79*, 531–554. [Paper](https://doi.org/10.1080/01621459.1984.10478080).
+- Heer, J., & Bostock, M. (2010). Crowdsourcing graphical perception: Using Mechanical Turk to assess visualization design. *Proceedings of CHI 2010*, 203–212. [Paper and materials](https://idl.uw.edu/papers/crowdsourcing-graphical-perception).
+
+Use these papers to motivate the judgement task, the choice of encodings and the experimental controls. Your study is a small adaptation; explain its differences from the published experiments.
+
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from ChatGPT (OpenAI)
+> in drafting explanations, developing examples and generating R code.
+> The author retains responsibility for the final content.
