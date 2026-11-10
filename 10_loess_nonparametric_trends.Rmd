@@ -175,12 +175,12 @@ fit_loess <- function(dat, span, family = "gaussian", degree = 1) {
   loess(y ~ x, data = dat, span = span, degree = degree, family = family,
         control = loess.control(surface = "direct"))
 }
-spans <- c(.12, .35, .85)
+spans <- c(.12, .35, .85, 10)
 fits <- lapply(spans, function(s) fit_loess(reg, s))
 ```
 
 ```{r span-panels, fig.width=10, fig.height=4, fig.cap="Local linear LOESS with three spans. Points and dashed true mean are identical across panels.", fig.alt="Small span follows short-scale fluctuations; intermediate span follows the broad oscillation; large span removes much of that oscillation."}
-with_panels(1, 3, {
+with_panels(1, length(spans), {
   for (j in seq_along(spans)) {
     plot(reg$x, reg$y, pch = 16, cex = .6, col = adjustcolor("black", .3),
          xlab = "x", ylab = "y", main = paste("Span =", spans[j]))
