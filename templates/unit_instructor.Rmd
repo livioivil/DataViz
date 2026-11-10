@@ -1,0 +1,127 @@
+---
+title: "Unit title — instructor notes and solutions"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization · Instructor Notes and Solutions"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+  pdf_document:
+    toc: true
+    toc_depth: 3
+lang: en
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = TRUE,
+  fig.width = 8, fig.height = 5, fig.align = "center",
+  dpi = 120, comment = "#>"
+)
+options(width = 90)
+blue <- "#0072B2"
+orange <- "#D55E00"
+green <- "#009E73"
+purple <- "#CC79A7"
+```
+
+# Companion and intended use
+
+**Student unit:** [Exact filename, title and section identifiers.]
+
+This companion contains teaching notes and exercise solutions. The student
+unit is the document to discuss in class and leave with students after the
+lesson. It contains the explanations and worked examples needed for
+independent review; it does not require this companion to render.
+
+Keep this file separate from the student handout. Files committed to the
+public course repository, including files on branches, are accessible.
+Only upload filled-in solutions when their release is intended. If you later
+distribute solutions to students, prepare a solutions-only copy without the
+teaching notes.
+
+# Preparation
+
+[List packages, data paths, seeds, expected input checks and any practical
+preparation. State which examples require extra preparation.]
+
+```{r data}
+# Reproduce the relevant student data import or simulation here.
+# Use the same preprocessing, seeds and analysis rows as the student unit.
+# Do not rely on objects left in the interactive workspace or source a
+# rendered student document to obtain them.
+```
+
+# Teaching route
+
+| Student section | Discussion prompt | Point to bring out |
+|:--|:--|:--|
+| [Section] | [Prompt to ask before showing the result] | [Expected insight] |
+
+[Optional pacing, demonstrations, points where students should predict
+before plotting, and alternatives if time is limited.]
+
+## Prerequisites and scope
+
+[State what students already know. Keep methods beyond that scope out of
+the core activities; identify any optional extension explicitly.]
+
+## Misconceptions to address
+
+- [Likely misunderstanding and the example or question that addresses it.]
+- [A plausible but unsupported interpretation to discuss.]
+
+# Exercise solutions
+
+## Activity A1: [same title as the student unit]
+
+**Question:** [Repeat the question briefly, retaining its identifier.]
+
+```{r solution-a1}
+# Complete code reproducing the answer from the documented data.
+```
+
+**Interpretation:** [Explain the result, not only the code. Include the
+reference group, units and limits of the conclusion.]
+
+**Acceptable alternatives:** [Other defensible graphical or analytical
+choices and how to assess their reasoning.]
+
+## Activity A2: [same title as the student unit]
+
+**Question:** [Repeat the question briefly, retaining its identifier.]
+
+```{r solution-a2}
+# Complete code reproducing the second answer.
+```
+
+**Interpretation:** [Explain what changes and what can be concluded.]
+
+**Acceptable alternatives:** [Other defensible answers.]
+
+# Answers to the self-assessment questions
+
+**Q1.** [Answer and reasoning.]
+
+**Q2.** [Answer and reasoning.]
+
+# Debrief and feedback
+
+[Connect the solutions to the student unit's take-home messages. Identify
+evidence of understanding, common errors and useful follow-up questions.]
+
+# References and reproducibility
+
+[Include sources used only in this companion and any additional data
+provenance. Record analytical checks and known limitations.]
+
+```{r session-info}
+sessionInfo()
+```

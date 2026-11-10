@@ -6,37 +6,150 @@ output:
   html_document:
     toc: true
     toc_float: true
-    self_contained: true
+    toc_depth: 3
+    number_sections: true
     code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
   pdf_document:
     toc: true
+    toc_depth: 3
+lang: en
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, warning = TRUE, message = FALSE,
-                     fig.width = 8, fig.height = 5)
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = TRUE,
+  fig.width = 8, fig.height = 5, fig.align = "center",
+  dpi = 120, comment = "#>"
+)
+options(width = 90)
+blue <- "#0072B2"
+orange <- "#D55E00"
+green <- "#009E73"
+purple <- "#CC79A7"
 ```
 
-# Learning objectives
+# The question we will investigate
 
-<!-- State what students will be able to do by the end of the unit. -->
+**Main question:** [Question connecting this unit's statistical idea to a
+concrete comparison.]
 
-# Prerequisites and materials
+[Context and motivation: why the question matters, and how it connects to
+the preceding unit.]
 
-<!-- List required knowledge, R packages, and dataset paths. -->
+Use these notes during our discussion and return to the explanations and
+worked examples afterwards. Before running each new analysis, predict what
+you expect to see. Compare your prediction with the result and explain what
+you learned.
 
-# Concepts and examples
+## Learning goals
 
-<!-- Explain chart choices and provide reproducible examples. -->
+By the end of this unit, you should be able to:
 
-# Activity
+- [Describe the main statistical or graphical idea.]
+- [Construct and interpret the relevant visualization.]
+- [Explain how an analytical choice can change the comparison.]
+- [State what the evidence supports and what it cannot establish.]
 
-<!-- Define the question, steps, expected deliverable, and review criteria. -->
+## What you need
 
-# Self-assessment questions
+**Prerequisites:** [Previously studied concepts needed for the core material.]
 
-<!-- Add questions to check understanding. -->
+**R packages:** `knitr` and `rmarkdown`, plus [packages used in this unit].
 
-# References and attribution
+**Files:** [Dataset and image paths, relative to the course folder.]
 
-<!-- Document sources, datasets, images, and their usage rights. -->
+Open `DataViz.Rproj` and work from the course folder. The worked examples
+include their code so that you can reproduce the figures and investigate
+alternative choices.
+
+# Data and context
+
+[Source and citation; whether the data are real or simulated; population,
+sampling or construction; what one row represents.]
+
+| Variable | Meaning | Unit or categories |
+|:--|:--|:--|
+| [Variable] | [Definition] | [Unit or categories] |
+
+```{r data}
+# Import the documented data from data/ or construct the teaching example.
+# Use an explicit seed immediately before any simulation.
+```
+
+[Explain the observations retained, missing values and any preprocessing.]
+
+# Concepts and worked examples
+
+## Begin with the observations
+
+[Introduce the first idea and the question answered by the plot. Define
+symbols and units before using them.]
+
+```{r worked-example}
+# Complete, executable code for the example discussed in the text.
+```
+
+**Reading the figure.** [Explain the axes, marks, reference groups and the
+pattern. Connect the graphical evidence to the question.]
+
+## Change one choice at a time
+
+[Introduce a meaningful comparison, keeping the data or other settings
+fixed where appropriate.]
+
+```{r comparison}
+# Complete, executable code for the comparison.
+```
+
+**Interpretation.** [Explain what changed, why it matters, and the limitations
+of this comparison.]
+
+# Explore and discuss
+
+## Activity A1: [short title]
+
+**Question:** [Question to investigate using the ideas above.]
+
+1. State your prediction and explain your reasoning.
+2. [Specify the analysis or graphical comparison to perform.]
+3. Describe the result and compare it with your prediction.
+4. State one limitation of the evidence.
+
+```{r activity-a1}
+# Add your analysis here.
+```
+
+**Your response:** [Write your interpretation and refer to your figure.]
+
+## Activity A2: [short title]
+
+[A second question that transfers the idea to a new setting or changes one
+assumption. State the required data and output.]
+
+```{r activity-a2}
+# Add your analysis here.
+```
+
+**Your response:** [Explain the comparison and your conclusion.]
+
+# Check your understanding
+
+**Q1.** [Conceptual question about what the plot or summary represents.]
+
+**Q2.** [Question about an interpretation that the evidence does not support.]
+
+# Take-home messages
+
+- [Central concept explained in a complete sentence.]
+- [Practical implication for constructing or reading a graph.]
+- [Main limitation or condition to remember.]
+
+# Sources and further reading
+
+- [Data source, provenance and applicable attribution.]
+- [Relevant textbook chapter or original methodological reference.]
+- [Documentation for the R functions used in the unit.]

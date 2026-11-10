@@ -7,7 +7,7 @@ The student catalogue is generated from `course.json`. Existing materials retain
 ## Adding or updating a unit
 
 1. Copy [templates/unit.Rmd](templates/unit.Rmd) to the repository root, for example as `05_unit_name.Rmd`. Use a stable number: do not renumber units already distributed simply to change their order.
-2. Fill in learning objectives, prerequisites, explanations, activities, and references. Store datasets in `data/` and images in `images/`, using descriptive names.
+2. Write the unit directly for students: it is used during class and retained afterwards as study material. Fill in the question, prerequisites, explanations, worked examples, activities, take-home messages, and references. Store datasets in `data/` and images in `images/`, using descriptive names. For teaching notes or exercise solutions, copy [templates/unit_instructor.Rmd](templates/unit_instructor.Rmd) separately, for example as `05_unit_name_instructor.Rmd`.
 3. Generate HTML and PDF with R Markdown and inspect them visually. Self-contained HTML files (`self_contained: true`) are convenient for individual downloads. If an HTML file requires external assets, include them in the repository and tell students to download the ZIP.
 4. Add an entry to [course.json](course.json): a unique `id`, `title`, `description`, `source`, and the available `html`/`pdf` paths. Omit a format if it is not yet available. Array order determines catalogue order; you can also add new sections.
 5. From the repository root, run `node scripts/build-course.mjs`, then `node scripts/build-course.mjs --check`. This requires Node.js 20 or later, with no additional packages. The check validates listed files, IDs, and generated catalogues; it does not run R analyses.
@@ -15,9 +15,25 @@ The student catalogue is generated from `course.json`. Existing materials retain
 
 Do not edit README tables or `index.html` cards directly: regeneration overwrites them. Edit [scripts/build-course.mjs](scripts/build-course.mjs) to change shared student instructions or the layout. Keep instructor instructions in this guide rather than adding them to student pages.
 
+## Student units and instructor companions
+
+The canonical course repository is [livioivil/DataViz](https://github.com/livioivil/DataViz). Use its current source files as the starting point; a local change is not available here until it has been pushed.
+
+The templates follow the shared author/subtitle and rendering conventions of units 01–09, particularly the lesson structure and HTML settings of units 05 and 07, with separate activity and solution documents as in units 06 and 08.
+
+- Keep `author: "Livio Finos, University of Padova"` and `subtitle: "A Course on Data Visualization"` for lecture units. Use the existing Group Activity or Homework subtitle suffix only for those kinds of documents.
+- Address the reader as a student. Keep full explanations, reproducible worked examples, figure interpretations, discussion questions and take-home messages in the student file. This is a lesson handout, not only an exercise worksheet.
+- Put pacing, teaching prompts, expected exercise answers, marking/feedback notes and solutions in the instructor companion. Do not put them in hidden chunks, HTML comments or a `show_solutions` switch inside the distributed student Rmd.
+- Preserve exercise identifiers (A1, A2, Q1, Q2, or the unit's existing identifiers) across the two files. Each file must render independently from the documented data and seeds.
+- Replace the bracketed template placeholders before distribution. Remove irrelevant sections and add optional extensions only when useful; no specific statistical method or inference prerequisite is imposed by the template.
+- Match the statistical level to the course: for students who have not studied inference, use descriptive comparisons, plots and correlations rather than tests, p-values or confidence intervals.
+- Reuse the stable filenames of existing units. Preserve their examples and analyses when adapting presentation, unless a correction is needed and documented.
+- Keep the instructor companion out of the student catalogue until deliberate release. This is not access control: all files committed to this public repository, including branch files, remain accessible. Prepare unreleased solutions locally; export a solutions-only document if instructor notes should remain separate.
+- Both templates declare self-contained HTML and PDF output. Render each independently with `output_format = "all"`, check warnings, and inspect both outputs. PDF rendering requires LaTeX. A catalogue check alone does not validate R chunks.
+
 ## Rendering with R
 
-Open `didactic_materials.Rproj`, install the packages required by the document, and work from the project root. For a new unit based on the template:
+Open `DataViz.Rproj`, install the packages required by the document, and work from the project root. For a new unit based on the template:
 
 ```r
 rmarkdown::render("05_unit_name.Rmd", output_format = "all")
@@ -50,3 +66,4 @@ The site serves HTML and PDF files already rendered locally and does not require
 - Do not upload individual submissions or students' personal data to the course repository.
 - Use descriptive commits. For completed course editions, tags and releases can help students retrieve the version they used.
 - Choose a licence for materials you own and preserve attribution for third-party resources. No licence has been assigned automatically to the existing materials.
+
