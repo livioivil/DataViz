@@ -580,3 +580,21 @@ Add three large positive response shifts near $x=0.5$ in Exercise 2. Compare ord
 - R documentation: [loess](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/loess.html), [predict.loess](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/predict.loess.html), and the built-in dataset documentation `?cars`.
 - Cleveland, Grosse and Shyu, [LOESS reference manual](https://netlib.org/a/cloess.pdf), for the robust local-fitting algorithm.
 - Cleveland, W. S. (1979). Robust locally weighted regression and smoothing scatterplots. *Journal of the American Statistical Association*, 74, 829–836.
+
+# Reproducibility information
+
+The source file was structurally checked when prepared, but its R chunks were not executed in the preparation environment because R was unavailable. When you knit it, the following records your actual runtime and package versions.
+
+```{r session-info}
+sessionInfo()
+```
+
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

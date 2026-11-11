@@ -60,6 +60,9 @@ For a continuous distribution with known parameters, the quantile rule has the s
 **Starting points in R:** `boxplot.stats()`, `robustbase::adjboxStats()`, `robustbase::adjbox()`, and distribution functions such as `qnorm()`, `qgamma()`, `qchisq()` and `qpois()`. Document which quartile or hinge convention you use.
 
 **Main reference:** Hubert, M., & Vandervieren, E. (2008). An adjusted boxplot for skewed distributions. *Computational Statistics & Data Analysis, 52*, 5186–5201. [Paper](https://doi.org/10.1016/j.csda.2007.11.008). Focus on the motivation, the medcouple and the construction of the adjusted fences.
+<https://www.sciencedirect.com/science/article/pii/S0167947307004434>
+
+**Another interesting reference:** Sun, Y., & Genton, M. G. (2011). *Functional Boxplots*. Journal of Computational and Graphical Statistics, 20(2), 316–334. <https://doi.org/10.1198/jcgs.2011.09224>
 
 # 2. Ordinary values, unusual combinations
 
@@ -210,9 +213,20 @@ Keep the participant task separate from the results dashboard so earlier results
 
 Use these papers to motivate the judgement task, the choice of encodings and the experimental controls. Your study is a small adaptation; explain its differences from the published experiments.
 
+# Reproducibility information
+
+The source file was structurally checked when prepared, but its R chunks were not executed in the preparation environment because R was unavailable. When you knit it, the following records your actual runtime and package versions.
+
+```{r session-info}
+sessionInfo()
+```
+
+
+_________________________________
 
 > **Note on AI assistance**
 >
-> These teaching materials were prepared with assistance from ChatGPT (OpenAI)
-> in drafting explanations, developing examples and generating R code.
-> The author retains responsibility for the final content.
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

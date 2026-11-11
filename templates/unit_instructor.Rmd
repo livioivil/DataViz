@@ -125,3 +125,14 @@ provenance. Record analytical checks and known limitations.]
 ```{r session-info}
 sessionInfo()
 ```
+
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.
+

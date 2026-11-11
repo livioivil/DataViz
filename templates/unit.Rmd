@@ -153,3 +153,21 @@ assumption. State the required data and output.]
 - [Data source, provenance and applicable attribution.]
 - [Relevant textbook chapter or original methodological reference.]
 - [Documentation for the R functions used in the unit.]
+
+# Reproducibility information
+
+The source file was structurally checked when prepared, but its R chunks were not executed in the preparation environment because R was unavailable. When you knit it, the following records your actual runtime and package versions.
+
+```{r session-info}
+sessionInfo()
+```
+
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.
