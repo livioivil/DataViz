@@ -7,29 +7,192 @@
     {
       "title": "Course units",
       "items": [
-        { "id": "01", "title": "History of statistical visualization", "description": "Read and discuss foundational examples by Playfair, Nightingale, Snow, and Minard.", "source": "01_historical_statistical_plots.rmd", "html": "01_historical_statistical_plots.html", "pdf": "01_historical_statistical_plots.pdf" },
-        { "id": "02", "title": "Activity 1 · Tables, counts, and proportions", "description": "Choose denominators and charts that match the analysis question.", "source": "02_student_activity_1_table_counts.rmd", "html": "02_student_activity_1_table_counts.html", "pdf": "02_student_activity_1_table_counts.pdf" },
-        { "id": "03", "title": "Statistical reasoning, perception, and colour", "description": "Evaluate scales, visual encodings, and colour choices.", "source": "03_visualization_reasoning_perception_colour.Rmd", "html": "03_visualization_reasoning_perception_colour.html", "pdf": "03_visualization_reasoning_perception_colour.pdf" },
-        { "id": "04", "title": "Activity 2 · Reaction time and accuracy", "description": "Work in groups to prepare a reproducible exploratory report with repeated measurements.", "source": "04_student_activity2_reaction_time.Rmd", "html": "04_student_activity2_reaction_time.html", "pdf": "04_student_activity2_reaction_time.pdf" },
-        { "id": "04-F", "title": "Activity 2 · Feedback and worked example", "description": "Consult after preparing your own report to compare analytical choices.", "source": "04_student_activity2_reaction_time_feedback.Rmd", "html": "04_student_activity2_reaction_time_feedback.html", "pdf": "04_student_activity2_reaction_time_feedback.pdf" },
-        { "id": "04-A", "title": "Reaction time · Further analysis", "description": "A reference report with paired participant summaries.", "source": "04_reaction_time_analysis.Rmd", "html": "04_reaction_time_analysis.html", "pdf": "04_reaction_time_analysis.pdf" },
-        { "id": "05", "title": "Boxplots: from distributions to models", "description": "Outliers.. it depends on the model.", "source": "05_boxplots_from_distributions_to_models.Rmd", "html": "05_boxplots_from_distributions_to_models.html", "pdf": "05_boxplots_from_distributions_to_models.pdf" },
-        { "id": "06", "title": "Activity 3 · unusual compared with what?", "description": "Outliers.. it depends on the context.", "source": "06_student_activity3_boxplots.Rmd", "html": "06_student_activity3_boxplots.html", "pdf": "06_student_activity3_boxplots.pdf" },
-        { "id": "07", "title": "Kernel Density Estimation: bandwidth and sample size", "description": "Explore bandwidth, sample size, kernel shapes, and boundary effects through real data and simulations.", "source": "07_kde_bandwidth_sample_size.Rmd", "html": "07_kde_bandwidth_sample_size.html" }
+        {
+          "id": "01",
+          "title": "History of statistical visualization",
+          "description": "Read and discuss foundational examples by Playfair, Nightingale, Snow, and Minard.",
+          "source": "01_historical_statistical_plots.rmd",
+          "html": "01_historical_statistical_plots.html",
+          "pdf": "01_historical_statistical_plots.pdf"
+        },
+        {
+          "id": "02",
+          "title": "Activity 1 · Tables, counts, and proportions",
+          "description": "Choose denominators and charts that match the analysis question.",
+          "source": "02_student_activity_1_table_counts.rmd",
+          "html": "02_student_activity_1_table_counts.html",
+          "pdf": "02_student_activity_1_table_counts.pdf"
+        },
+        {
+          "id": "03",
+          "title": "Statistical reasoning, perception, and colour",
+          "description": "Evaluate scales, visual encodings, and colour choices.",
+          "source": "03_visualization_reasoning_perception_colour.Rmd",
+          "html": "03_visualization_reasoning_perception_colour.html",
+          "pdf": "03_visualization_reasoning_perception_colour.pdf"
+        },
+        {
+          "id": "04",
+          "title": "Activity 2 · Reaction time and accuracy",
+          "description": "Work in groups to prepare a reproducible exploratory report with repeated measurements.",
+          "source": "04_student_activity2_reaction_time.Rmd",
+          "html": "04_student_activity2_reaction_time.html",
+          "pdf": "04_student_activity2_reaction_time.pdf"
+        },
+        {
+          "id": "04-A",
+          "title": "Reaction time · Further analysis",
+          "description": "A reference report with paired participant summaries.",
+          "source": "04_reaction_time_analysis.Rmd",
+          "html": "04_reaction_time_analysis.html",
+          "pdf": "04_reaction_time_analysis.pdf"
+        },
+        {
+          "id": "04-F",
+          "title": "Activity 2 · Feedback and worked example",
+          "description": "Consult after preparing your own report to compare analytical choices.",
+          "source": "04_student_activity2_reaction_time_feedback.Rmd",
+          "html": "04_student_activity2_reaction_time_feedback.html",
+          "pdf": "04_student_activity2_reaction_time_feedback.pdf"
+        },
+        {
+          "id": "05",
+          "title": "Boxplots: from distributions to models",
+          "description": "Outliers.. it depends on the model.",
+          "source": "05_boxplots_from_distributions_to_models.Rmd",
+          "html": "05_boxplots_from_distributions_to_models.html",
+          "pdf": "05_boxplots_from_distributions_to_models.pdf"
+        },
+        {
+          "id": "06",
+          "title": "Activity 3 · unusual compared with what?",
+          "description": "Outliers.. it depends on the context.",
+          "source": "06_student_activity3_boxplots.Rmd",
+          "html": "06_student_activity3_boxplots.html",
+          "pdf": "06_student_activity3_boxplots.pdf"
+        },
+        {
+          "id": "07",
+          "title": "Kernel Density Estimation: bandwidth and sample size",
+          "description": "Explore bandwidth, sample size, kernel shapes, and boundary effects through real data and simulations.",
+          "source": "07_kde_bandwidth_sample_size.Rmd",
+          "html": "07_kde_bandwidth_sample_size.html"
+        },
+        {
+          "id": "08",
+          "title": "Activity 4 · Confounding and categorical variables",
+          "description": "Design and analyse a study of shoe size, reading scores and an age-related confounder.",
+          "source": "08_student_activity4_confounders.Rmd",
+          "html": "08_student_activity4_confounders.html"
+        },
+        {
+          "id": "09",
+          "title": "Homework · Penguins: distributions, groups and hidden associations",
+          "description": "Use species and sex to examine distributions and associations in penguin measurements.",
+          "source": "09_homework_penguins_task.Rmd",
+          "html": "09_homework_penguins_task.html"
+        },
+        {
+          "id": "10",
+          "title": "LOESS: nonparametric trends and span selection",
+          "description": "Explore local regression, span selection and the reliability of smoothed trends.",
+          "source": "10_loess_nonparametric_trends.Rmd",
+          "html": "10_loess_nonparametric_trends.html"
+        },
+        {
+          "id": "11",
+          "title": "From Distances to Maps: Multidimensional Scaling",
+          "description": "Define and compare distances, then use classical MDS and spectral decomposition to map non-textual multivariate data.",
+          "source": "11_mds_distances.Rmd",
+          "html": "11_mds_distances.html"
+        },
+        {
+          "id": "12",
+          "title": "Activity 5 · Mapping mixed customer profiles",
+          "description": "Design a Gower distance for numeric, ordinal, nominal and binary customer-profile variables, then map it with MDS.",
+          "source": "12_student_activity5_mixed_distances.Rmd",
+          "html": "12_student_activity5_mixed_distances.html"
+        }
       ]
     },
     {
       "title": "Additional materials",
       "items": [
-        { "id": "EX-01", "title": "Lab · 30 September 2026", "description": "Importing, summarizing, and plotting the students.csv dataset.", "source": "extra/lesson_2026_09_30.Rmd", "html": "extra/lesson_2026_09_30.html", "pdf": "extra/lesson_2026_09_30.pdf" }
+        {
+          "id": "EX-00",
+          "title": "Graphics showcase",
+          "description": "A gallery of base-R graphical options and plotting patterns.",
+          "source": "00_graphics_showcase.Rmd",
+          "html": "00_graphics_showcase.html"
+        },
+        {
+          "id": "EX-01",
+          "title": "Lab · 30 September 2026",
+          "description": "Importing, summarizing, and plotting the students.csv dataset.",
+          "source": "extra/lesson_2026_09_30.Rmd",
+          "html": "extra/lesson_2026_09_30.html",
+          "pdf": "extra/lesson_2026_09_30.pdf"
+        },
+        {
+          "id": "EX-02",
+          "title": "Shiny group-project briefs",
+          "description": "Six project briefs for interactive visualisation apps, including document maps and word networks.",
+          "source": "shiny_group_project_briefs.Rmd",
+          "html": "shiny_group_project_briefs.html"
+        }
       ]
     }
   ],
   "datasets": [
-    { "path": "data/RT_data.csv", "title": "Reaction time", "description": "Activity 2: participant, condition, trial, accuracy, and response time." },
-    { "path": "data/students.csv", "title": "Attendance and assignments", "description": "Additional lab: class attendance and submitted assignments." },
-    { "path": "data/boxplots_data.csv", "title": "Boxplot", "description": "Boxplot unit." },
-    { "path": "data/hippocampus_memory_age_continuous.csv", "title": "Memory, hippocampus, and continuous age", "description": "Available for further study; not yet assigned to a course unit." },
-    { "path": "data/hippocampus_memory_age_group.csv", "title": "Memory, hippocampus, and age groups", "description": "A variant with age groups; not yet assigned to a course unit." }
+    {
+      "path": "data/RT_data.csv",
+      "title": "Reaction time",
+      "description": "Activity 2: participant, condition, trial, accuracy, and response time."
+    },
+    {
+      "path": "data/students.csv",
+      "title": "Attendance and assignments",
+      "description": "Additional lab: class attendance and submitted assignments."
+    },
+    {
+      "path": "data/boxplots_data.csv",
+      "title": "Boxplot",
+      "description": "Boxplot unit."
+    },
+    {
+      "path": "data/hippocampus_memory_age_continuous.csv",
+      "title": "Memory, hippocampus, and continuous age",
+      "description": "Available for further study; not yet assigned to a course unit."
+    },
+    {
+      "path": "data/hippocampus_memory_age_group.csv",
+      "title": "Memory, hippocampus, and age groups",
+      "description": "A variant with age groups; not yet assigned to a course unit."
+    },
+    {
+      "path": "data/ecological_communities.csv",
+      "title": "Ecological communities",
+      "description": "Unit 11: real Dutch dune-meadow plant cover classes (20 sites × 30 species), used to compare Bray–Curtis and Hellinger–Euclidean distance."
+    },
+    {
+      "path": "data/ecological_communities_metadata.csv",
+      "title": "Ecological communities metadata",
+      "description": "Site-level environmental context for the Dutch dune-meadow data: soil horizon, moisture, management, land use and manure level."
+    },
+    {
+      "path": "data/shoe_size_reading.csv",
+      "title": "Shoe size and reading",
+      "description": "Activity 4: simulated primary-school measurements for a confounding exercise."
+    },
+    {
+      "path": "data/penguins.csv",
+      "title": "Penguins",
+      "description": "Homework: penguin body measurements, species, island and sex."
+    },
+    {
+      "path": "data/customer_profiles.csv",
+      "title": "Mixed customer profiles",
+      "description": "Activity 5: synthetic anonymous profiles with numeric, ordinal, nominal and binary variables for Gower distance."
+    }
   ]
 }

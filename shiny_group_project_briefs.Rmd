@@ -13,7 +13,7 @@ output:
 lang: en
 ---
 
-Choose one of the five projects below and develop a Shiny app that helps its users investigate a statistical question. Your app should connect interaction, visualization and interpretation: users should be able to make a prediction, change a meaningful setting, observe the result and explain what they have learned.
+Choose one of the six projects below and develop a Shiny app that helps its users investigate a statistical question. Your app should connect interaction, visualization and interpretation: users should be able to make a prediction, change a meaningful setting, observe the result and explain what they have learned.
 
 Each brief specifies a **core project** and an **optional extension**. Complete the core before adding features. You may use existing R packages for statistical methods; your contribution is to understand the methods, design informative comparisons and communicate the findings clearly. You are not expected to reproduce every result or implement every algorithm in the reference papers.
 
@@ -212,6 +212,92 @@ Keep the participant task separate from the results dashboard so earlier results
 - Heer, J., & Bostock, M. (2010). Crowdsourcing graphical perception: Using Mechanical Turk to assess visualization design. *Proceedings of CHI 2010*, 203–212. [Paper and materials](https://idl.uw.edu/papers/crowdsourcing-graphical-perception).
 
 Use these papers to motivate the judgement task, the choice of encodings and the experimental controls. Your study is a small adaptation; explain its differences from the published experiments.
+
+# 6. From documents to maps and networks
+
+*Text preprocessing, TF--IDF, document distances and word networks*
+
+**Main question.** How do preprocessing and distance choices change the visual
+story told by a collection of documents?
+
+Text is not directly a table of measurements. Before a document can be compared
+with another document, the analyst must decide what counts as a token, whether to
+remove stop words, how to handle case, numbers and punctuation, and whether to
+stem or lemmatise words. These are analytical choices, not merely cleaning steps.
+
+## Core project
+
+Build a Shiny app for a small documented corpus, such as speeches, news articles,
+song-free public-domain texts, course descriptions or abstracts. The corpus should
+contain at least 20 documents and a meaningful document-level grouping or label.
+Do not use private student work, personal messages, or copyrighted texts that you
+cannot redistribute with the app.
+
+Your app must have four linked components:
+
+1. **Preprocessing panel.** Let users select a documented set of preprocessing
+   decisions: tokenisation, lowercasing, stop-word list and a minimum document
+   frequency. Show how many documents, tokens and distinct terms remain after
+   each choice. Do not make stemming or lemmatisation an unexplained default.
+2. **Basic document report.** Show overall and group-specific term frequencies.
+   Use a bar chart as the primary display; a word cloud may be included only as a
+   secondary exploratory view. Report document length so that raw counts are not
+   mistaken for importance.
+3. **Document map.** Construct a document--term matrix, compute TF--IDF weights,
+   and compare documents using cosine distance. Display a two-dimensional MDS
+   configuration, with points coloured by the documented group. Provide a table
+   of nearest neighbours for a selected document and show its most influential
+   TF--IDF terms.
+4. **Word network.** Tokenise the original ordered text into bigrams, construct a
+   directed weighted network, and provide a transparent frequency/probability
+   threshold. Use node labels, a readable layout and a short explanation of what
+   an edge means. Retain or remove stop words deliberately: removing them may
+   simplify the network but can remove meaningful grammatical links.
+
+The default app state must answer one coherent question without requiring users
+to adjust controls. All changes to preprocessing, distance or network threshold
+must update the relevant graphic and a visible text summary of the active choice.
+
+## Investigations to present
+
+- **Raw counts versus TF--IDF:** identify a frequent word that becomes less
+  important after inverse-document-frequency weighting, and explain why.
+- **Distance sensitivity:** compare cosine distance on TF--IDF with one justified
+  alternative, such as Jaccard distance on binary term occurrence. Which document
+  neighbourhoods are stable and which change?
+- **Map interpretation:** select two close documents and inspect the terms that
+  make them similar. Select two far documents and state what the map alone cannot
+  establish.
+- **Network thresholding:** raise the edge threshold and record which conclusion
+  changes because low-frequency links disappear. Explain why a filtered network
+  is a visual model rather than a neutral picture of language.
+
+Document MDS axes have no intrinsic semantic meaning: rotation and reflection
+leave the represented pairwise distances unchanged. Interpret proximity, separation
+and the quality of distance reproduction, rather than naming an MDS axis after a
+topic. A word co-occurrence edge describes local sequence, not causality or a
+general semantic relation.
+
+**Optional extension — simple Markov exploration.** Convert bigram counts to
+conditional transition probabilities. For a selected source word, display the
+outgoing probabilities and explain the row-stochastic transition matrix. Avoid
+generating long artificial prose as evidence of language understanding.
+
+**Starting points in R:** `tidytext::unnest_tokens()`, `tidytext::stop_words`,
+`tidytext::bind_tf_idf()`, `widyr::pairwise_count()`, `cmdscale()`, `igraph`,
+`tidygraph` and `ggraph`. `quanteda` is a suitable alternative if you document
+the equivalent preprocessing and weighting choices.
+
+**Main references:**
+
+- Silge, J., & Robinson, D. (2017). *Text Mining with R: A Tidy Approach*.
+  O'Reilly. See the chapters on tidy text, TF--IDF and n-grams.
+- Salton, G., Wong, A., & Yang, C. S. (1975). A vector space model for automatic
+  indexing. *Communications of the ACM, 18*(11), 613--620.
+  <https://doi.org/10.1145/361219.361220>
+- Manning, C. D., Raghavan, P., & Schütze, H. (2008). *Introduction to
+  Information Retrieval*. Cambridge University Press. See the chapters on
+  term weighting and vector-space retrieval.
 
 # Reproducibility information
 

@@ -71,17 +71,6 @@ Short activities appear where each idea is introduced: predict, plot, explain.
 downloads or objects from other units are needed. Simulations have explicit
 seeds.
 
-## Rendering
-
-```{r render-instructions, eval=FALSE}
-install.packages(c("rmarkdown", "knitr"))  # once, if necessary
-rmarkdown::render("07_kde_bandwidth_sample_size.Rmd",
-                  output_format = "html_document")
-```
-
-Pandoc is required and is normally supplied by RStudio. PDF rendering also
-requires a LaTeX installation. Simulations are teaching constructions; real
-datasets are identified at their first use.
 
 ## Recommended reading
 
@@ -526,14 +515,16 @@ d_default <- density(waiting)
 d_sj <- density(waiting, bw = "SJ")
 # adjust multiplies the selected bandwidth:
 d_half <- density(waiting, bw = "SJ", adjust = .5)
+
 ```
 
 ```{r selector-plot, fig.cap="Automatic bandwidth choices for real waiting times; neither is validated by a known population density."}
 plot(d_default, col = blue, lwd = 2, ylim = c(0, max(d_default$y, d_sj$y)),
      xlab = "Waiting time (minutes)", main = "Two starting resolutions")
 lines(d_sj, col = orange, lwd = 2)
+lines(d_half, col = green, lwd = 2)
 rug(waiting, col = adjustcolor("black", .2))
-legend("topright", c("nrd0", "SJ"),
+legend("topright", c("nrd0", "SJ","half"),
        col = c(blue, orange), lty = 1, lwd = 2, bty = "n")
 ```
 

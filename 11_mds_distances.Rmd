@@ -1,0 +1,730 @@
+---
+title: "From Distances to Maps: Multidimensional Scaling"
+author: "Livio Finos, University of Padova"
+subtitle: "Unit 11 — Data Visualization"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+lang: en
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = FALSE,
+  fig.width = 8, fig.height = 5, fig.align = "center", dpi = 130,
+  comment = "#>"
+)
+
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(readr)
+
+blue <- "#0072B2"
+orange <- "#D55E00"
+green <- "#009E73"
+purple <- "#CC79A7"
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Why work with distances?
+
+Many datasets are naturally represented as a rectangular table: one row per
+person, site, product or image; one column per measured variable. In other
+problems, the scientifically meaningful starting point is not a variable but a
+**comparison between objects**. Examples include:
+
+- ecological sites compared through their species composition;
+- products compared through consumer ratings or ingredient profiles;
+- patients compared through a set of symptoms or biomarkers;
+- cities compared through travel time rather than straight-line geography.
+
+In all these cases we can ask the same question:
+
+> Which objects are close, which are far apart, and can that structure be shown
+> in a useful low-dimensional map?
+
+This unit introduces distances and **classical multidimensional scaling (MDS)**.
+It deliberately concerns non-textual data. Text documents will be treated later,
+when we can make the preprocessing and weighting choices explicit.
+
+## Learning goals
+
+By the end of the unit, you should be able to:
+
+- distinguish an object-by-variable table from an object-by-object distance matrix;
+- state the properties of a metric and recognise a dissimilarity that is not one;
+- calculate and compare Euclidean, Manhattan, Jaccard and Bray--Curtis distances;
+- explain why standardisation and the choice of distance are modelling decisions;
+- construct and interpret a classical MDS configuration in R;
+- connect the MDS construction to spectral decomposition;
+- use eigenvalues to diagnose whether a distance is exactly Euclidean and how well
+  a two-dimensional map represents it.
+
+**Prerequisites:** vectors and matrices, Euclidean distance, centring, and the
+spectral decomposition of a real symmetric matrix. You do not need prior
+knowledge of clustering or ordination.
+
+# Objects, variables and distance matrices
+
+Let \(x_i=(x_{i1},\ldots,x_{ip})\) denote the measurements for object \(i\).
+After choosing a comparison rule \(d\), we obtain the distance matrix
+
+\[
+D=(d_{ij}),\qquad d_{ij}=d(x_i,x_j).
+\]
+
+The matrix is square, symmetric and has zeros on its diagonal. It contains
+\(n(n-1)/2\) distinct pairwise comparisons, not \(np\) original measurements.
+This distinction matters: the original variables may disappear after distances
+are computed, so their units and preprocessing choices must be documented.
+
+```{r three-points}
+points3 <- rbind(A = c(0, 0), B = c(3, 4), C = c(3, 0))
+points3
+round(as.matrix(dist(points3)), 2)
+```
+
+For these coordinates, \(d(A,B)=5\) under Euclidean distance. The matrix says
+that A is farthest from B and that C lies between them in one sense, but it no
+longer records that the original variables were horizontal and vertical position.
+
+## Metric or general dissimilarity?
+
+A **metric** satisfies, for every pair or triple of objects,
+
+\[
+\begin{aligned}
+d(x_i,x_j)&\geq 0 &&\text{(non-negativity)},\\
+d(x_i,x_j)&=0 \Leftrightarrow x_i=x_j &&\text{(identity)},\\
+d(x_i,x_j)&=d(x_j,x_i) &&\text{(symmetry)},\\
+d(x_i,x_k)&\leq d(x_i,x_j)+d(x_j,x_k) &&\text{(triangle inequality)}.
+\end{aligned}
+\]
+
+In applications, we also use broader **dissimilarities**. They may be useful even
+when one of these properties fails. For example, a directed travel time may fail
+symmetry; a correlation-based dissimilarity may not have a direct physical unit.
+The important question is not whether a formula is fashionable, but whether it
+expresses the scientific comparison we need.
+
+# Four useful ways to compare objects
+
+## Euclidean distance: straight-line difference
+
+For quantitative variables on commensurate scales,
+
+\[
+d_E(x_i,x_j)=\left\{\sum_{k=1}^p(x_{ik}-x_{jk})^2\right\}^{1/2}.
+\]
+
+Euclidean distance gives large differences disproportionate influence because
+they are squared. It is appropriate when the variables define meaningful
+Cartesian coordinates, or when a straight-line geometry is substantively useful.
+
+```{r euclidean-example}
+x <- c(1, 2, 4)
+y <- c(4, 2, 1)
+sqrt(sum((x - y)^2))
+```
+
+## Manhattan distance: total coordinate-wise change
+
+The Manhattan (or \(L_1\)) distance is
+
+\[
+d_M(x_i,x_j)=\sum_{k=1}^p |x_{ik}-x_{jk}|.
+\]
+
+It measures the total absolute difference and is less dominated by one very large
+coordinate difference than Euclidean distance. It can be motivated by movement
+along a grid, but it is also a general robust alternative for numerical profiles.
+
+```{r manhattan-example}
+sum(abs(x - y))
+```
+
+## Jaccard distance: presence and absence of features
+
+For binary data, shared absences often carry little information. If two sites
+both lack a rare species, that does not necessarily make them similar. Let
+\(a\) be the number of shared presences, and \(b,c\) the mismatches. Jaccard
+similarity and distance are
+
+\[
+s_J=\frac{a}{a+b+c},\qquad d_J=1-s_J.
+\]
+
+```{r jaccard-example}
+jaccard_distance <- function(a, b) {
+  shared_present <- sum(a == 1 & b == 1)
+  present_either <- sum(a == 1 | b == 1)
+  1 - shared_present / present_either
+}
+
+site_a <- c(1, 1, 0, 0, 0, 1)
+site_b <- c(1, 0, 0, 1, 0, 1)
+jaccard_distance(site_a, site_b)
+```
+
+Use Jaccard for occurrence data, tags or sets. It is not a natural choice when
+the original measurements are abundances and their magnitude is meaningful.
+
+## Bray--Curtis distance: composition with abundances
+
+For non-negative abundance vectors, Bray--Curtis distance is
+
+\[
+d_{BC}(x_i,x_j)=
+\frac{\sum_{k=1}^p |x_{ik}-x_{jk}|}
+     {\sum_{k=1}^p(x_{ik}+x_{jk})}.
+\]
+
+It lies between zero and one. A feature absent from both objects contributes
+neither to the numerator nor the denominator. Consequently, it is popular for
+species abundance, microbial communities, market baskets and other composition
+data with many zeros.
+
+Bray--Curtis is a valid and useful dissimilarity, but it is not generally an
+exact Euclidean distance. That fact will become visible in its MDS eigenvalues.
+
+# A Euclidean distance needs standardisation when units differ
+
+Euclidean distance is often exactly the right comparison rule, but only after
+we decide what a one-unit change in each variable should mean. Consider the
+course dataset on memory, hippocampal volume and background measurements. Age
+is measured in years, intracranial volume (ICV) in a much larger physical unit,
+motion on a small scale, and memory on a score scale. A raw Euclidean distance
+would be driven mainly by variables with the largest numerical spread; that is
+a statement about units, not about scientific importance.
+
+When the aim is to compare profiles by *relative position on each measured
+variable*, a common choice is the column-wise z-score
+
+\[
+z_{ij}=\frac{x_{ij}-\bar{x}_{\cdot j}}{s_j}.
+\]
+
+Euclidean distance on these z-scores gives each selected variable variance one.
+This does **not** make it universally better: it says that one standard deviation
+of age, ICV, motion, sleep, stress, memory or hippocampal volume deserves equal
+weight. That is a substantive choice. Identifiers and binary/categorical fields
+must not be silently treated as continuous measurements.
+
+```{r euclidean-standardisation-example}
+brain <- read_csv("data/hippocampus_memory_age_continuous.csv", show_col_types = FALSE)
+brain_profile <- brain |> select(memory_score, hippocampal_volume, age, ICV,
+                                 motion, sleep_hours, stress_score)
+
+d_brain_raw <- dist(brain_profile)
+d_brain_z <- dist(scale(brain_profile))
+
+# Mean squared pairwise difference identifies which variables drive raw distance.
+raw_contribution <- sapply(brain_profile, function(v) mean(outer(v, v, "-")^2))
+contribution <- tibble(variable = names(raw_contribution), mean_squared_difference = raw_contribution)
+knitr::kable(arrange(contribution, desc(mean_squared_difference)), digits = 2,
+             caption = "Raw Euclidean distance is dominated by variables with large numerical scales.")
+```
+
+```{r euclidean-standardisation-plot, fig.cap="The two distances do not merely differ by a constant multiplier: standardisation can change which pairs of profiles are judged closest."}
+comparison_brain <- tibble(raw = as.vector(d_brain_raw), z_scored = as.vector(d_brain_z))
+ggplot(comparison_brain, aes(raw, z_scored)) +
+  geom_point(colour = blue, alpha = .55) +
+  geom_smooth(method = "loess", se = FALSE, colour = orange, linewidth = 1) +
+  labs(title = "Raw and z-scored Euclidean distance answer different questions",
+       x = "Raw Euclidean distance", y = "Euclidean distance after z-scoring")
+```
+
+# Worked example: Dutch dune-meadow communities
+
+We use the real `dune` data distributed with the R package `vegan`. It contains
+cover-class values for 30 plant species recorded at 20 Dutch dune-meadow sites.
+The companion metadata record soil A1-horizon thickness, moisture, management,
+land use and manure level. The observations come from the dune-meadow study
+reported by Jongman, ter Braak and van Tongeren (1987).
+
+The course folder includes two redistributable CSV files extracted from that
+dataset: `ecological_communities.csv` contains the species-by-site table and
+`ecological_communities_metadata.csv` contains the site metadata. Species names
+are abbreviated as in the original teaching dataset. The cover classes are
+ordered abundance scores, not direct counts from equal-area sampling.
+
+```{r community-data}
+community <- read_csv("data/ecological_communities.csv", show_col_types = FALSE)
+site_metadata <- read_csv("data/ecological_communities_metadata.csv", show_col_types = FALSE)
+abundance <- community |> select(-site) |> as.data.frame()
+rownames(abundance) <- community$site
+knitr::kable(head(site_metadata), caption = "First six rows of the site metadata. Full data are available in the CSV file.")
+```
+
+## A first description of the community data
+
+Each row is one meadow site and each of the 30 species columns is an ordinal
+cover-class score. Before computing any distances, ask how dense the site
+profiles are and whether the sites differ in their recorded management. The
+site total is a simple sum of cover scores, whereas species richness is the
+number of species with a non-zero score. Neither is a direct ecological
+abundance estimate, but both make the scale and sparsity of the input tangible.
+
+```{r community-summary}
+site_description <- tibble(
+  summary = c("Number of sites", "Number of species", "Site-total cover score: min / median / max",
+              "Species richness: min / median / max"),
+  value = c(
+    nrow(abundance), ncol(abundance),
+    sprintf("%s / %.1f / %s", min(rowSums(abundance)), median(rowSums(abundance)), max(rowSums(abundance))),
+    sprintf("%s / %.1f / %s", min(rowSums(abundance > 0)), median(rowSums(abundance > 0)), max(rowSums(abundance > 0)))
+  )
+)
+knitr::kable(site_description, caption = "Basic descriptive summary of the dune-meadow community matrix.")
+
+site_profiles <- tibble(
+  site = rownames(abundance),
+  total_cover_score = rowSums(abundance),
+  species_richness = rowSums(abundance > 0)
+) |> left_join(site_metadata |> select(site, Management), by = "site")
+knitr::kable(count(site_profiles, Management, name = "sites"), caption = "Sites by recorded management category.")
+```
+
+```{r community-description-plot, fig.cap="The sites differ both in total cover score and in the number of recorded species; these features are part of what a distance can respond to."}
+ggplot(site_profiles, aes(total_cover_score, species_richness, colour = Management, label = site)) +
+  geom_point(size = 3) +
+  geom_text(nudge_y = .35, show.legend = FALSE) +
+  labs(title = "Density and richness of the 20 site profiles",
+       x = "Sum of cover-class scores", y = "Number of species present")
+```
+
+## What does each distance discriminate?
+
+The relevant question is not whether numerical values of two distances can be
+compared directly: they usually cannot. The question is whether a distance
+separates sites in a way that corresponds to a defensible notion of ecological
+difference.
+
+Bray--Curtis compares the absolute difference in the species profiles with the
+combined abundance of the two sites. Its denominator is
+\(\sum_k(x_{ik}+x_{jk})\), twice the average total score of the pair. Thus it
+creates a unitless *relative* discrepancy and prevents a uniformly larger
+abundance scale from mechanically creating arbitrarily large distances. It does
+not make totals irrelevant: two sites with the same composition but very different
+total abundance still have positive Bray--Curtis dissimilarity.
+
+For count-like observations, independent Poisson sampling is a useful reminder:
+both the expected count and its variance grow with abundance. Raw Euclidean
+distance therefore gives highly abundant species a large role partly because they
+are numerically large and partly because their sampling variation is larger.
+It is a pragmatic
+composition-oriented dissimilarity. If total abundance is driven mainly by unequal
+sampling effort, the effort problem should be addressed before interpreting any
+distance.
+
+```{r distance-functions}
+bray_curtis <- function(x) {
+  x <- as.matrix(x)
+  n <- nrow(x)
+  out <- matrix(0, n, n, dimnames = list(rownames(x), rownames(x)))
+  for (i in seq_len(n - 1)) {
+    for (j in (i + 1):n) {
+      out[i, j] <- out[j, i] <- sum(abs(x[i, ] - x[j, ])) / sum(x[i, ] + x[j, ])
+    }
+  }
+  as.dist(out)
+}
+
+d_euclidean <- dist(abundance, method = "euclidean")
+d_bray <- bray_curtis(abundance)
+
+relative_abundance <- sweep(as.matrix(abundance), 1, rowSums(abundance), "/")
+hellinger <- sqrt(relative_abundance)
+d_hellinger <- dist(hellinger, method = "euclidean")
+```
+
+## Hellinger transformation: composition in Euclidean geometry
+
+For each site, Hellinger transformation first changes cover scores into a
+composition (each row sums to one), then takes the square root of each relative
+abundance. The resulting distance is
+
+\[
+d_H(i,j)=\left[\sum_{k=1}^p\left(\sqrt{\frac{x_{ik}}{x_{i+}}}-
+\sqrt{\frac{x_{jk}}{x_{j+}}}\right)^2\right]^{1/2}.
+\]
+
+It therefore compares composition rather than raw total cover, while the square
+root reduces the dominance of common species. Most importantly for this unit,
+the transformed rows lie in an ordinary Euclidean space: their Euclidean
+distances can be represented exactly by a sufficiently high-dimensional MDS
+configuration. Hellinger transformation is not a generic replacement for
+Bray--Curtis; it answers a closely related but distinct question.
+
+```{r compare-distance-heatmaps, fig.width=10, fig.height=6, fig.cap="Bray--Curtis and Euclidean distance after Hellinger standardisation encode different, but related, composition contrasts. The numerical values use different scales; compare the pattern of close and distant pairs instead."}
+distance_long <- bind_rows(
+  as.data.frame(as.table(as.matrix(d_bray))) |> rename(site_1 = Var1, site_2 = Var2, distance = Freq) |> mutate(metric = "Bray--Curtis"),
+  as.data.frame(as.table(as.matrix(d_hellinger))) |> rename(site_1 = Var1, site_2 = Var2, distance = Freq) |> mutate(metric = "Euclidean after Hellinger")
+) |> filter(site_1 != site_2)
+
+ggplot(distance_long, aes(site_1, site_2, fill = distance)) +
+  geom_tile(colour = "white") +
+  geom_text(aes(label = sprintf("%.2f", distance)), size = 3) +
+  facet_wrap(~ metric) +
+  scale_fill_viridis_c(option = "C") +
+  coord_fixed() +
+  labs(title = "Pairwise distances depend on the question", x = NULL, y = NULL, fill = "Distance") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+## Bray--Curtis versus standardised Euclidean distance
+
+Hellinger standardisation first converts each site profile to relative abundance
+and then takes square roots. The square root reduces the dominance of common
+species and makes Euclidean geometry available. It is not the same as applying a
+column-wise z-score: z-scoring gives every species equal variance across sites and
+can make a rare species influential merely because it varies little.
+
+```{r bray-hellinger-agreement, fig.width=9, fig.height=4, fig.cap="The metrics need not have the same numerical scale. Their rank agreement tells us whether they broadly discriminate the same pairs of sites."}
+comparison <- tibble(
+  bray = as.vector(d_bray),
+  hellinger_euclidean = as.vector(d_hellinger)
+)
+
+ggplot(comparison, aes(bray, hellinger_euclidean)) +
+  geom_point(size = 2.4, colour = blue, alpha = .8) +
+  geom_smooth(method = "loess", se = FALSE, colour = orange, linewidth = 1) +
+  labs(
+    title = "Do the two distances discriminate similar site pairs?",
+    subtitle = paste("Spearman rank correlation =", round(cor(comparison$bray, comparison$hellinger_euclidean, method = "spearman"), 2)),
+    x = "Bray--Curtis dissimilarity",
+    y = "Euclidean distance after Hellinger standardisation"
+  )
+```
+
+Neither distance is universally better.
+
+| If the scientific emphasis is… | Prefer… | Why |
+|---|---|---|
+| A traditional ecological comparison of abundance profiles, with shared zeros ignored | Bray--Curtis | Its denominator gives a relative, bounded discrepancy and it is widely interpretable for community composition. |
+| A composition analysis requiring Euclidean geometry, PCA-like tools or an exactly Euclidean MDS input | Hellinger transformation + Euclidean distance | It compares transformed relative abundances and gives a Euclidean distance matrix. |
+| Equal influence for every species after accounting for each species' variability | Column-standardised Euclidean distance | This is a different question; use it only when equal species variance is substantively intended. |
+
+Report the selected definition and show a sensitivity comparison when conclusions
+depend on it. A result is reproducible only if the transformations, distance and
+included species are documented.
+
+## Scaling is also a modelling choice
+
+Column-wise standardisation is valuable for generic multivariate measurements in
+different units, but it is not a default repair for species-abundance tables. To
+make the contrast visible, we compare Hellinger Euclidean distance with Euclidean
+distance after species-wise z-scoring.
+
+```{r scaling-example, fig.cap="Standardisation changes Euclidean distances by changing the relative influence of variables."}
+scaled_distance <- as.matrix(dist(scale(abundance)))
+hellinger_distance <- as.matrix(d_hellinger)
+
+plot(hellinger_distance[upper.tri(hellinger_distance)], scaled_distance[upper.tri(scaled_distance)],
+     pch = 19, col = adjustcolor(blue, .7),
+     xlab = "Euclidean distance after Hellinger transformation",
+     ylab = "Euclidean distance after species-wise z-scoring",
+     main = "Different standardisations encode different questions")
+abline(lm(scaled_distance[upper.tri(scaled_distance)] ~ hellinger_distance[upper.tri(hellinger_distance)]),
+       col = orange, lwd = 2)
+```
+
+# Classical MDS: turn distances into coordinates
+
+MDS receives a distance matrix and returns coordinates. Classical MDS finds a
+Euclidean configuration whose interpoint distances reproduce the input as closely
+as possible. The configuration can then be plotted just like ordinary coordinates.
+
+## The spectral-decomposition connection
+
+Let \(D^{(2)}\) be the matrix with entries \(d_{ij}^2\), and let
+
+\[
+J=I_n-\frac{1}{n}\mathbf{1}\mathbf{1}^T
+\]
+
+be the centring matrix. Classical MDS constructs
+
+\[
+B=-\frac12 JD^{(2)}J.
+\]
+
+If the input distances are Euclidean, \(B\) is the centred Gram matrix
+\(XX^T\). It is symmetric and positive semidefinite. By the spectral theorem,
+
+\[
+B=Q\Lambda Q^T,
+\]
+
+where \(Q\) contains orthonormal eigenvectors and \(\Lambda\) contains real
+eigenvalues. Retaining the \(r\) positive eigenvalues gives coordinates
+
+\[
+X_r=Q_r\Lambda_r^{1/2}.
+\]
+
+This is not a black-box connection: eigenvectors provide map directions, while
+eigenvalues quantify how much centred squared-distance structure those directions
+represent.
+
+```{r manual-mds}
+classical_mds <- function(d, k = 2) {
+  D2 <- as.matrix(d)^2
+  n <- nrow(D2)
+  J <- diag(n) - matrix(1 / n, n, n)
+  B <- -0.5 * J %*% D2 %*% J
+  eig <- eigen(B, symmetric = TRUE)
+  positive <- which(eig$values > 1e-10)
+  keep <- positive[seq_len(min(k, length(positive)))]
+  coordinates <- eig$vectors[, keep, drop = FALSE] %*%
+    diag(sqrt(eig$values[keep]), nrow = length(keep))
+  rownames(coordinates) <- rownames(D2)
+  list(points = coordinates, eigenvalues = eig$values, B = B)
+}
+
+mds_bray <- classical_mds(d_bray, k = 2)
+mds_hellinger <- classical_mds(d_hellinger, k = 2)
+round(mds_bray$eigenvalues, 4)
+```
+
+## MDS map of the communities
+
+```{r bray-mds-map, fig.width=8, fig.height=6, fig.cap="Classical MDS map based on Bray--Curtis dissimilarity. Colour records the observed management category; the map itself was computed using species cover classes only."}
+mds_df <- as.data.frame(mds_bray$points) |>
+  setNames(c("MDS1", "MDS2")) |>
+  mutate(site = rownames(mds_bray$points)) |>
+  left_join(site_metadata |> select(site, Management, Moisture), by = "site")
+
+ggplot(mds_df, aes(MDS1, MDS2, colour = Management, label = site)) +
+  geom_hline(yintercept = 0, colour = "grey85") +
+  geom_vline(xintercept = 0, colour = "grey85") +
+  geom_point(size = 4) +
+  geom_text(nudge_y = 0.025, show.legend = FALSE) +
+  scale_colour_brewer(palette = "Dark2") +
+  coord_equal() +
+  labs(title = "Community composition: Bray--Curtis MDS", x = "MDS dimension 1", y = "MDS dimension 2", colour = "Management")
+```
+
+Sites with similar species composition tend to lie close together; management is
+shown as external descriptive context, not as an input to the distance. Any visual
+association with management is exploratory and does not establish a causal effect.
+
+## Why MDS axes have no inherent interpretation
+
+Multiplying every coordinate matrix by an orthogonal rotation or reflection leaves
+all interpoint Euclidean distances unchanged. Thus MDS1 is not “the management
+gradient” unless an external analysis supports that interpretation.
+The stable evidence is proximity, separation, groups and the fit of map distances
+to original distances.
+
+```{r rotation-invariance, fig.width=9, fig.height=4, fig.cap="A 90-degree rotation changes axes but preserves all pairwise distances. Both panels are the same MDS solution."}
+rot90 <- matrix(c(0, -1, 1, 0), nrow = 2)
+rotated <- as.matrix(mds_df[, c("MDS1", "MDS2")]) %*% rot90
+rotated_df <- data.frame(MDS1 = rotated[, 1], MDS2 = rotated[, 2], site = mds_df$site, Management = mds_df$Management)
+
+p1 <- ggplot(mds_df, aes(MDS1, MDS2, colour = Management, label = site)) + geom_point(size = 3) + geom_text(nudge_y = .025) + coord_equal() + labs(title = "Original orientation")
+p2 <- ggplot(rotated_df, aes(MDS1, MDS2, colour = Management, label = site)) + geom_point(size = 3) + geom_text(nudge_y = .025) + coord_equal() + labs(title = "Rotated orientation")
+
+print(p1)
+print(p2)
+```
+
+# Choosing the number of dimensions
+
+Two dimensions are chosen here because the intended final display is a static
+map. This is a communication constraint, not evidence that the data are
+intrinsically two-dimensional. In an exactly Euclidean problem, the number of
+positive eigenvalues is the dimension required for exact reconstruction. With
+non-Euclidean dissimilarities, negative eigenvalues add a separate warning about
+the geometry.
+
+Choose \(k\) using all three pieces of evidence below:
+
+1. **Eigenvalue spectrum:** is there an elbow after the first few positive
+   eigenvalues?
+2. **Distance reproduction:** does the configuration preserve the pairwise
+   distances sufficiently for the intended claim?
+3. **Communication purpose:** two dimensions are easy to print and annotate;
+   three dimensions may be inspected interactively; additional dimensions may be
+   retained for later analysis without being drawn as a single map.
+
+Do not call the eigenvalue fraction “variance explained” without qualification:
+this is MDS of a distance matrix, not PCA of the original variables. Here it is a
+fraction of positive centred squared-distance structure.
+
+```{r choose-dimensions, fig.width=9, fig.height=4, fig.cap="The positive-eigenvalue scree plot and its cumulative fraction help decide whether a two-dimensional map is an adequate simplification."}
+positive_bray <- mds_bray$eigenvalues[mds_bray$eigenvalues > 1e-10]
+dimension_summary <- tibble(
+  dimension = seq_along(positive_bray),
+  eigenvalue = positive_bray,
+  cumulative_fraction = cumsum(positive_bray) / sum(positive_bray)
+)
+
+p_scree <- ggplot(dimension_summary, aes(dimension, eigenvalue)) +
+  geom_col(fill = blue) +
+  labs(title = "Positive-eigenvalue spectrum", x = "Dimension", y = "Eigenvalue")
+
+p_cumulative <- ggplot(dimension_summary, aes(dimension, cumulative_fraction)) +
+  geom_line(colour = orange, linewidth = 1) +
+  geom_point(colour = orange, size = 2.5) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
+  labs(title = "Cumulative positive-eigenvalue fraction", x = "Dimensions retained", y = "Fraction")
+
+print(p_scree)
+print(p_cumulative)
+```
+
+# Reading MDS eigenvalues and fit
+
+For an exactly Euclidean distance, all non-zero eigenvalues of \(B\) are
+non-negative. Bray--Curtis is not guaranteed to have that property. Small
+negative eigenvalues tell us that no exact Euclidean configuration reproduces all
+of its distances. They are not an automatic failure: they are diagnostic evidence
+that the distance geometry is only approximately Euclidean.
+
+```{r eigenvalue-plot, fig.cap="Positive and negative MDS eigenvalues for Bray--Curtis dissimilarity. Negative values reveal non-Euclidean structure."}
+eig_df <- tibble(dimension = seq_along(mds_bray$eigenvalues), eigenvalue = mds_bray$eigenvalues)
+ggplot(eig_df, aes(dimension, eigenvalue, fill = eigenvalue > 0)) +
+  geom_col(show.legend = FALSE) +
+  geom_hline(yintercept = 0) +
+  scale_fill_manual(values = c(`TRUE` = blue, `FALSE` = orange)) +
+  labs(title = "MDS eigenvalues", x = "Dimension", y = "Eigenvalue")
+```
+
+Two simple summaries are useful:
+
+```{r fit-summaries}
+abs_eigen <- abs(mds_bray$eigenvalues)
+variance_like_fit <- sum(abs_eigen[1:2]) / sum(abs_eigen)
+
+map_d <- dist(mds_bray$points)
+distance_correlation <- cor(as.vector(d_bray), as.vector(map_d))
+
+c(two_dimension_positive_eigenvalue_fraction = variance_like_fit,
+  correlation_original_vs_map_distance = distance_correlation)
+```
+
+The first value reports how much of the **absolute-eigenvalue** structure is retained in two dimensions. The overall structure comprises the positive eigenvalues that can be represented in an Euclidean space (i.e. by increasing the number of dimensions), and the negative ones that cannot be described by an Euclidean distance, no matter the number of dimensions. The second reports whether pairs far apart in the original
+distance also tend to be far apart on the map. Neither is a universal threshold;
+inspect the map and its distance reproduction before treating it as a complete
+representation.
+
+## What changes under Hellinger--Euclidean distance?
+
+The following comparison does not select a winner mechanically. It makes the
+trade-off explicit: Bray--Curtis is a familiar ecological dissimilarity but its
+classical MDS has negative eigenvalues; Hellinger--Euclidean distance gives an
+exactly Euclidean input but can emphasise a different ecological contrast.
+
+```{r metric-comparison}
+mds_summary <- function(d, fit) {
+  eig <- fit$eigenvalues
+  absolute <- eig[eig > 1e-10]
+  map_distance <- dist(fit$points)
+  c(
+    negative_eigenvalues = sum(eig < -1e-10),
+    two_dimension_absolute_fraction = sum(absolute[1:2]) / sum(absolute),
+    original_map_distance_correlation = cor(as.vector(d), as.vector(map_distance))
+  )
+}
+
+comparison_table <- rbind(
+  `Bray--Curtis` = mds_summary(d_bray, mds_bray),
+  `Hellinger + Euclidean` = mds_summary(d_hellinger, mds_hellinger)
+)
+knitr::kable(round(comparison_table, 3), caption = "Diagnostics for two defensible distance choices. Higher map-distance correlation indicates better two-dimensional distance reproduction; it is not a universal measure of scientific quality.")
+```
+
+If the scientific message is stable across the two maps, confidence in the broad
+description increases. If it changes, do not choose the prettier map: return to
+the data-generating and sampling context, state the competing definitions of
+similarity, and report the sensitivity.
+
+```{r shepard-plot, fig.cap="A Shepard-style plot compares original Bray--Curtis dissimilarities with distances on the two-dimensional MDS map. Points close to the diagonal would indicate perfect reproduction."}
+shepard <- tibble(original = as.vector(d_bray), map = as.vector(map_d))
+ggplot(shepard, aes(original, map)) +
+  geom_point(size = 2.5, colour = blue, alpha = .8) +
+  geom_abline(slope = 1, intercept = 0, linetype = 2, colour = orange) +
+  coord_equal(xlim = c(0,1)) + 
+  labs(title = "How faithfully does the map reproduce distance?", x = "Original Bray--Curtis dissimilarity", y = "Distance in the 2D MDS map")
+```
+
+# Classical MDS and non-metric MDS
+
+Classical MDS tries to preserve the numerical values of distances. If only the
+rank order of dissimilarities is trusted, **non-metric MDS** is often preferable:
+it seeks a configuration whose map distances have the same ordering as the input
+dissimilarities. Non-metric MDS is especially common with ecological or ordinal
+dissimilarities, and is normally assessed with stress and repeated starts.
+
+We postpone non-metric MDS implementation until students are comfortable with the
+classical construction. The conceptual contrast is important:
+
+| Method | Main aim | Diagnostic |
+|---|---|---|
+| Classical MDS | Preserve numerical distances as closely as possible | eigenvalues, distance-reproduction plot |
+| Non-metric MDS | Preserve rank order of dissimilarities | stress, distance-rank plot, stability across starts |
+
+# Practical workflow
+
+When building a distance-based visualization, document these decisions:
+
+1. What are the objects? What are the variables or features?
+2. Have variables been transformed, standardised or weighted? Why?
+3. Which distance was chosen, and what kind of difference does it represent?
+4. Does a two-dimensional map reproduce the distances adequately?
+5. Are map labels and graphical encodings accessible and interpretable?
+6. Which conclusion is descriptive, and which would require additional design or modelling assumptions?
+
+<!-- ## In-class: predict before computing -->
+
+<!-- 1. For the community data, identify the two sites you expect to be closest under -->
+<!--    Bray--Curtis and the two you expect to be most distant. Check your prediction. -->
+<!-- 2. Compare Euclidean and Bray--Curtis heatmaps. Identify one pair whose relative -->
+<!--    similarity changes substantially. Explain the reason in terms of the formula. -->
+<!-- 3. Rotate the MDS coordinates by an arbitrary angle. Which conclusions must remain -->
+<!--    unchanged? -->
+
+<!-- ## Homework: a defensible distance-based map -->
+
+<!-- Choose one multivariate dataset with at least 15 objects and three variables. -->
+<!-- Produce a reproducible report that: -->
+
+<!-- - defines objects and variables; -->
+<!-- - compares two plausible distance choices; -->
+<!-- - justifies one chosen distance; -->
+<!-- - gives an MDS map with direct labels or a clear legend; -->
+<!-- - reports an eigenvalue and distance-reproduction diagnostic; -->
+<!-- - states one limitation of the visualization. -->
+
+<!-- Do not use text documents for this assignment: they will form the subject of the -->
+<!-- next units. -->
+
+# Take-home messages
+
+- A distance is a model of what it means for two objects to differ.
+- Standardisation is not a neutral default; it changes that model.
+- Classical MDS is spectral decomposition applied to a double-centred squared
+  distance matrix.
+- MDS axes are arbitrary up to rotation and reflection. Interpret distances,
+  neighbourhoods and separation instead.
+- Negative eigenvalues are informative diagnostics for non-Euclidean distances.
+- A beautiful MDS map is not sufficient evidence: report the input distance and
+  inspect its reproduction.
+
+---
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from ChatGPT (OpenAI)
+> in drafting explanations, developing examples and generating R code. The author
+> retains responsibility for the final content.

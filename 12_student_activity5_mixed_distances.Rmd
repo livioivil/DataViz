@@ -1,0 +1,251 @@
+---
+title: "Student Activity 5: Mapping mixed customer profiles"
+author: "Livio Finos, University of Padova"
+subtitle: "Distance design with mixed variables · Class activity and homework"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: hide
+    theme: readable
+    fig_caption: true
+    self_contained: true
+lang: en
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5, fig.align = "center", dpi = 130)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(cluster)
+blue <- "#0072B2"
+orange <- "#D55E00"
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Scenario
+
+A retailer wants to make a map of 24 **synthetic, anonymous** customer profiles.
+The aim is descriptive: identify profiles that are similar across demographic,
+behavioural and preference variables. It is not a prediction task and it is not
+permission to infer sensitive personal characteristics. The data were designed
+for this activity; they do not describe real people.
+
+The difficulty is fundamental: the columns do not all have the same kind of
+meaning. Age and income are numeric, loyalty has an order, preferred channel and
+region are labels, and discount use is binary. Before calculating a distance,
+we must decide how each type of difference contributes.
+
+## Learning goals
+
+By the end, you should be able to:
+
+- classify variables as numeric, ordinal, nominal, binary or identifiers;
+- explain why arbitrary numerical codes for categories can create a false geometry;
+- calculate and inspect Gower dissimilarities for mixed data;
+- make and qualify a two-dimensional MDS map; and
+- report the choices of variables, types and weights that define a distance.
+
+# Part A — In class
+
+Work in groups of three or four. Submit one short, reproducible R Markdown or
+Quarto report per group. Every graph must have labelled axes and an interpretation
+in words. Do not begin by asking an AI assistant or by searching for a ready-made
+analysis: first record the choices below in your report.
+
+## 1. Inspect and classify the data
+
+Read `data/customer_profiles.csv`. Make a data dictionary with one row per
+column. For each variable, state its type and whether it should enter a customer
+distance. Explain why `customer_id` must be retained for labels but excluded from
+the calculation.
+
+Also state what one row represents, what one pairwise distance represents, and
+one use of the resulting map that would be defensible versus one that would not.
+
+> **Plan before prompting.** Save this initial specification before requesting
+> help from an AI assistant. If you use AI later, give it your specification,
+> verify every suggestion, and keep a decision log explaining what you accepted,
+> changed or rejected.
+
+```{r import-data, echo=FALSE}
+customers <- read_csv("data/customer_profiles.csv", show_col_types = FALSE) |>
+  mutate(
+    loyalty_tier = ordered(loyalty_tier, levels = c("Bronze", "Silver", "Gold", "Platinum")),
+    preferred_channel = factor(preferred_channel),
+    region = factor(region),
+    uses_discount = factor(uses_discount, levels = c("No", "Yes"))
+  )
+
+glimpse(customers)
+summary(customers)
+```
+
+## 2. Define a defensible mixed-variable distance
+
+Gower dissimilarity is a useful default for this setting. For each pair of
+customers it is the weighted average of variable-specific dissimilarities:
+
+\[
+d_G(i,j)=
+\frac{\sum_{k=1}^{p} w_k\,\delta_{ijk}\,d_{ijk}}
+     {\sum_{k=1}^{p} w_k\,\delta_{ijk}}.
+\]
+
+Here \(w_k\) is the chosen weight for variable \(k\), \(\delta_{ijk}=1\) when
+that variable is observed for both customers (and 0 otherwise), and
+\(0\leq d_{ijk}\leq1\) is its variable-specific difference. For a numeric
+variable,
+
+\[
+d_{ijk}=\frac{|x_{ik}-x_{jk}|}{\max(x_{\cdot k})-\min(x_{\cdot k})};
+\]
+
+for a nominal variable it is 0 for a match and 1 for a mismatch. An ordered
+factor is compared through the distance between its ordered ranks, scaled to the
+range from 0 to 1. Thus a difference of 10 years and a difference of 10 thousand
+euros are not compared in raw units. The formula also makes two decisions visible:
+which variables enter the distance, and which weights they receive.
+
+Before using software, complete the following audit in your report:
+
+1. Decide whether discount use is symmetric binary (both values informative) or
+   asymmetric binary (only one value informative). Defend the choice.
+2. State whether all selected variables initially have equal weights, and what
+   “equal” means after numeric variables have been range-scaled.
+3. Compute by hand the contributions of **age**, **income**, and **preferred
+   channel** for two chosen pairs. Show the ranges used and what the partial
+   calculation does not yet include.
+4. Predict one close pair and one distant pair before computing the full matrix.
+
+Use `cluster::daisy()` below. Check the help page and state how the function
+treats each of your columns. Then identify the three closest and three most
+distant customer pairs. Are the results plausible from the original rows?
+
+In addition, check for missing values, duplicated profiles and zero distances
+between distinct customers. A distance value alone is not an interpretation:
+every claim about a close or distant pair must be checked against the original
+variables. Compare your prediction with the calculated results and identify one
+agreement and one surprise.
+
+```{r gower-distance, echo=FALSE}
+profile_variables <- customers |>
+  select(age, income_k_eur, visits_last_month, loyalty_tier,
+         preferred_channel, region, uses_discount, returns_last_year) |>
+  as.data.frame()
+rownames(profile_variables) <- customers$customer_id
+
+d_gower <- daisy(profile_variables, metric = "gower")
+gower_matrix <- as.matrix(d_gower)
+
+pairs <- as.data.frame(as.table(gower_matrix)) |>
+  transmute(customer_1 = as.character(Var1), customer_2 = as.character(Var2),
+            dissimilarity = Freq) |>
+  filter(customer_1 < customer_2) |>
+  arrange(dissimilarity)
+
+pair_examples <- bind_rows(
+  head(pairs, 3) |> mutate(comparison = "Closest"),
+  tail(pairs, 3) |> mutate(comparison = "Most distant")
+) |> select(comparison, customer_1, customer_2, dissimilarity)
+knitr::kable(pair_examples, digits = 3, row.names = FALSE,
+             col.names = c("Comparison", "Customer 1", "Customer 2", "Gower dissimilarity"),
+             caption = "Three closest and three most distant profile pairs under Gower dissimilarity.")
+```
+
+## 3. Map the profiles and inspect the approximation
+
+Fit classical MDS to the Gower matrix. Colour points by loyalty tier and use
+point shape for preferred channel. Describe two visible patterns and one
+important limitation of the map. Remember that proximity is the evidence; a
+horizontal or vertical axis has no intrinsic interpretation.
+
+Your report must also include a distance-reproduction (Shepard-style) plot:
+original Gower dissimilarities on the horizontal axis and two-dimensional map
+distances on the vertical axis. Report their correlation and identify a pair
+with a substantial discrepancy from the diagonal.
+
+```{r mds-map, echo=FALSE, fig.cap="A two-dimensional classical-MDS display of mixed customer profiles. It is an approximation to the Gower dissimilarities."}
+fit <- cmdscale(d_gower, k = 2, eig = TRUE)
+map <- customers |>
+  transmute(customer_id, loyalty_tier, preferred_channel,
+            MDS1 = fit$points[, 1], MDS2 = fit$points[, 2])
+
+ggplot(map, aes(MDS1, MDS2, colour = loyalty_tier, shape = preferred_channel, label = customer_id)) +
+  geom_point(size = 3) +
+  geom_text(nudge_y = .025, show.legend = FALSE, size = 3) +
+  coord_equal() +
+  labs(title = "Customer profiles under Gower dissimilarity",
+       colour = "Loyalty tier", shape = "Preferred channel")
+
+map_distance <- dist(fit$points)
+cor(as.vector(d_gower), as.vector(map_distance))
+```
+
+## 4. Compare with a bad shortcut
+
+Someone proposes encoding `preferred_channel` as Mobile = 1, Store = 2, Web = 3,
+and then computing Euclidean distance. Explain why this imposes an invented order
+and why the size of the gaps is arbitrary. Demonstrate the issue by changing the
+codes, or compare it with Gower. Do not present the shortcut as an alternative
+recommended analysis.
+
+# Part B — Homework extension
+
+Complete these questions individually. Limit the report to four pages of text,
+tables and figures (appendix code does not count).
+
+1. **Sensitivity to weights.** The retailer considers recent visits twice as
+   important as region. Recompute Gower dissimilarity using `weights` in
+   `daisy()`. Which nearest-neighbour relationships change? Is the change useful
+   for the stated purpose, or merely convenient?
+2. **Sensitivity to variables.** Refit the map without age and income. Explain
+   what substantive question the revised distance now answers.
+3. **Map quality.** Plot original Gower dissimilarities against distances on the
+   two-dimensional map. Report their correlation and identify a pair whose
+   distance is noticeably poorly reproduced.
+4. **Decision memo.** Write 150--200 words specifying the objects, variables,
+   variable types, weights, distance, map limitation and one ethical limitation
+   of customer profiling.
+
+## Assessment checklist
+
+| Criterion | Evidence |
+|---|---|
+| Data understanding | Accurate data dictionary; identifier excluded; types justified. |
+| Distance design | Clear explanation of Gower and of at least one modelling choice. |
+| Visual reasoning | Labelled MDS map, explicit interpretation, no invented axis meaning. |
+| Reproducibility | Code runs from the course folder and uses the supplied CSV. |
+| Critical reasoning | Sensitivity comparison and a limitation stated clearly. |
+
+
+## Required report sections
+
+| Section | Required content |
+|---|---|
+| Initial distance plan | Objects, purpose, data dictionary, types, binary convention and weights |
+| Manual audit | Two partial hand calculations, predictions and explanation of Gower components |
+| Baseline results | Pair table, source-variable comparison, MDS map and distance-reproduction plot |
+| Sensitivity analysis | Weight and scope comparisons, with stable and changed conclusions |
+| Reproducibility and AI appendix | Code, package versions, decision log, relevant prompts and AI statement |
+
+An AI-assistance statement can follow this template, adapted to the work actually
+performed:
+
+> **AI assistance.** We used [tool/model, if available; date] to assist with
+> [specific tasks]. We checked [specific code, calculations, and
+> interpretations] and revised [main issues]. The group takes responsibility
+> for the submitted analysis and conclusions.
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.

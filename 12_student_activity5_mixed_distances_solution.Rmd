@@ -1,0 +1,229 @@
+---
+title: "Student Activity 5: Mapping mixed customer profiles — solution"
+author: "Livio Finos, University of Padova"
+subtitle: "Instructor reference"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+lang: en
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      fig.width = 8, fig.height = 5, fig.align = "center", dpi = 130)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(cluster)
+blue <- "#0072B2"
+orange <- "#D55E00"
+theme_set(theme_minimal(base_size = 12))
+```
+
+# Scope of this reference
+
+This is one defensible solution, not the only acceptable one. The data are
+synthetic, so the purpose is to make modelling decisions explicit: identifiers
+are not measurements, nominal labels have no numerical order, and variable
+importance is a choice to justify rather than a fact produced by software.
+
+# 1. Data dictionary and distance specification
+
+```{r import}
+customers <- read_csv("data/customer_profiles.csv", show_col_types = FALSE) |>
+  mutate(
+    loyalty_tier = ordered(loyalty_tier, levels = c("Bronze", "Silver", "Gold", "Platinum")),
+    preferred_channel = factor(preferred_channel),
+    region = factor(region),
+    uses_discount = factor(uses_discount, levels = c("No", "Yes"))
+  )
+
+dictionary <- tibble(
+  variable = names(customers),
+  type = c("identifier", "numeric", "numeric", "numeric", "ordinal",
+           "nominal", "nominal", "binary symmetric", "numeric count"),
+  include_in_distance = c("No", rep("Yes", 8)),
+  reason = c(
+    "Labels rows only; numerical differences between IDs are meaningless.",
+    "Range-scaled numeric difference.", "Range-scaled numeric difference.",
+    "Range-scaled behavioural frequency.", "Ordered ranks are meaningful.",
+    "Only same/different is meaningful.", "Only same/different is meaningful.",
+    "Both Yes and No are informative here.", "Range-scaled behavioural count."
+  )
+)
+knitr::kable(dictionary, row.names = FALSE, caption = "One defensible variable classification.")
+```
+
+The selected Gower dissimilarity is
+
+\[
+d_G(i,j)=
+\frac{\sum_{k=1}^{p}w_k\,\delta_{ijk}\,d_{ijk}}
+     {\sum_{k=1}^{p}w_k\,\delta_{ijk}}.
+\]
+
+For numeric variables, \(d_{ijk}=|x_{ik}-x_{jk}|/R_k\), where \(R_k\) is the
+observed range. For nominal variables it is 0 for a match and 1 for a mismatch.
+For an ordered factor it is the scaled rank difference. In this baseline all
+weights are one; that is a transparent default, not proof that variables are
+equally important for every business purpose.
+
+```{r baseline-distance}
+profiles <- customers |>
+  select(age, income_k_eur, visits_last_month, loyalty_tier,
+         preferred_channel, region, uses_discount, returns_last_year) |>
+  as.data.frame()
+rownames(profiles) <- customers$customer_id
+d_gower <- daisy(profiles, metric = "gower")
+
+pair_table <- function(d) {
+  as.data.frame(as.table(as.matrix(d))) |>
+    transmute(customer_1 = as.character(Var1), customer_2 = as.character(Var2),
+              dissimilarity = Freq) |>
+    filter(customer_1 < customer_2) |>
+    arrange(dissimilarity)
+}
+
+pairs <- pair_table(d_gower)
+pair_examples <- bind_rows(
+  head(pairs, 3) |> mutate(comparison = "Closest"),
+  tail(pairs, 3) |> mutate(comparison = "Most distant")
+) |> select(comparison, customer_1, customer_2, dissimilarity)
+knitr::kable(pair_examples, digits = 3, row.names = FALSE,
+             caption = "Closest and most distant pairs for the equal-weight baseline.")
+```
+
+Close pairs should share several characteristics, not necessarily every one.
+Conversely, a combination of different region, channel, discount use and
+loyalty tier can make a pair distant even when ages are similar.
+
+# 2. MDS map and its limitation
+
+```{r baseline-map, fig.cap="Classical MDS of the equal-weight Gower dissimilarities. The axes are arbitrary coordinate directions, not customer traits."}
+fit <- cmdscale(d_gower, k = 2, eig = TRUE)
+map <- customers |>
+  transmute(customer_id, loyalty_tier, preferred_channel,
+            MDS1 = fit$points[, 1], MDS2 = fit$points[, 2])
+
+ggplot(map, aes(MDS1, MDS2, colour = loyalty_tier, shape = preferred_channel,
+                label = customer_id)) +
+  geom_point(size = 3) +
+  geom_text(nudge_y = .025, show.legend = FALSE, size = 3) +
+  coord_equal() +
+  labs(title = "Customer profiles under equal-weight Gower dissimilarity",
+       colour = "Loyalty tier", shape = "Preferred channel")
+
+map_distance <- dist(fit$points)
+cor(as.vector(d_gower), as.vector(map_distance))
+```
+
+The map gives a compact view of major profile contrasts. It is not complete:
+Gower dissimilarity is not guaranteed to be Euclidean, and two dimensions cannot
+preserve every pairwise distance. The correlation printed above is a descriptive
+diagnostic of distance reproduction, not an acceptance threshold.
+
+# 3. Why arbitrary numeric codes are not valid
+
+If Mobile = 1, Store = 2 and Web = 3, Euclidean distance says that Mobile is
+twice as far from Web as it is from Store. Replacing the codes with Mobile = 1,
+Store = 3 and Web = 2 reverses that geometry without changing the observed
+categories. The numerical gaps come from the coding decision, not the data.
+A nominal variable should enter through a same/different comparison.
+
+# 4. Homework extension
+
+## 4.1 Give recent visits double weight
+
+```{r weighted-distance}
+weight_visits <- c(age = 1, income_k_eur = 1, visits_last_month = 2,
+                   loyalty_tier = 1, preferred_channel = 1, region = 1,
+                   uses_discount = 1, returns_last_year = 1)
+d_weighted <- daisy(profiles, metric = "gower", weights = weight_visits)
+
+knitr::kable(head(pair_table(d_weighted), 6), digits = 3, row.names = FALSE,
+             caption = "Closest pairs after giving visits double weight.")
+```
+
+The weighting is defensible only if visit frequency is genuinely twice as
+important for the stated segmentation purpose. It must be documented and checked
+as a sensitivity analysis; choosing weights merely because they create a desired
+visual grouping is not defensible.
+
+## 4.2 Remove age and income
+
+```{r remove-demographics, fig.cap="Removing age and income changes the target from demographic-plus-behavioural similarity to engagement and preference similarity."}
+profiles_behavioural <- profiles |> select(-age, -income_k_eur)
+d_behavioural <- daisy(profiles_behavioural, metric = "gower")
+fit_behavioural <- cmdscale(d_behavioural, k = 2)
+
+behavioural_map <- customers |>
+  transmute(customer_id, loyalty_tier, preferred_channel,
+            MDS1 = fit_behavioural[, 1], MDS2 = fit_behavioural[, 2])
+ggplot(behavioural_map, aes(MDS1, MDS2, colour = loyalty_tier,
+                            shape = preferred_channel, label = customer_id)) +
+  geom_point(size = 3) +
+  geom_text(nudge_y = .025, show.legend = FALSE, size = 3) +
+  coord_equal() +
+  labs(title = "Profiles after removing age and income",
+       colour = "Loyalty tier", shape = "Preferred channel")
+```
+
+Removing variables changes the scientific question; it is not merely a graphical
+adjustment. This version compares engagement, loyalty and preferences rather
+than a broader demographic-plus-behavioural profile.
+
+## 4.3 Distance-reproduction plot
+
+```{r shepard, fig.cap="Pairs far from the diagonal are poorly reproduced by the two-dimensional map."}
+original <- as.matrix(d_gower)
+mapped <- as.matrix(map_distance)
+reproduction <- tibble(
+  customer_1 = rownames(original)[row(original)[upper.tri(original)]],
+  customer_2 = colnames(original)[col(original)[upper.tri(original)]],
+  original_distance = original[upper.tri(original)],
+  map_distance = mapped[upper.tri(mapped)]
+) |> mutate(absolute_error = abs(original_distance - map_distance))
+
+ggplot(reproduction, aes(original_distance, map_distance)) +
+  geom_point(colour = blue, alpha = .7) +
+  geom_abline(slope = 1, intercept = 0, colour = orange, linewidth = 1) +
+  labs(title = "Original Gower dissimilarity versus map distance",
+       x = "Gower dissimilarity", y = "Two-dimensional MDS distance")
+
+knitr::kable(slice_max(reproduction, absolute_error, n = 1),
+             digits = 3, row.names = FALSE,
+             caption = "Pair with the largest distance-reproduction error.")
+```
+
+The pair with the largest error deserves inspection, but it is not necessarily
+an error in the data. It is a relationship that cannot be retained faithfully in
+this two-dimensional representation.
+
+# 5. Example decision memo
+
+> We compared anonymised customer profiles, excluding the identifier. We used
+> Gower dissimilarity because the variables include numeric measures, an ordinal
+> loyalty tier, nominal channel and region, and binary discount use. Numeric
+> differences were scaled by observed ranges and baseline weights were one.
+> Classical MDS gives an exploratory map in which nearby points have similar
+> profiles under this explicit specification. The axes are not customer traits,
+> and the map does not reproduce every dissimilarity exactly. Any weighting must
+> be tied to a documented purpose. Customer profiling can also amplify unfair
+> treatment or support inferences beyond the data, so the map is not an automated
+> decision rule.
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.
