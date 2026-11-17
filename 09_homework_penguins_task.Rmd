@@ -1,8 +1,11 @@
 ---
-title: "Penguins: distributions, groups and hidden associations"
-subtitle: "A Course on Data Visualization · Homework"
+title: 'Penguins: distributions, groups and hidden associations'
 author: "Livio Finos, University of Padova"
+subtitle: A Course on Data Visualization · Homework
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '2'
   html_document:
     toc: true
     toc_float: true

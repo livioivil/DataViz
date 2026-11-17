@@ -1,8 +1,11 @@
 ---
-title: "Student Activity 4: Can shoe size predict reading?"
+title: 'Student Activity 4: Can shoe size predict reading?'
 author: "Livio Finos, University of Padova"
-subtitle: "A Course on Data Visualization · Group Activity"
+subtitle: A Course on Data Visualization · Group Activity
 output:
+  pdf_document:
+    toc: true
+    toc_depth: '3'
   html_document:
     toc: true
     toc_float: true

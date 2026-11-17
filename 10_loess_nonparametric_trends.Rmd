@@ -3,6 +3,9 @@ title: "LOESS: nonparametric trends and span selection"
 author: "Livio Finos, University of Padova"
 subtitle: "A Course on Data Visualization"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
   html_document:
     toc: true
     toc_float: true
@@ -13,9 +16,6 @@ output:
     fig_caption: true
     self_contained: true
     df_print: paged
-  pdf_document:
-    toc: true
-    toc_depth: 3
 lang: en
 ---
 
