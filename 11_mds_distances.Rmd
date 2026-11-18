@@ -3,10 +3,6 @@ title: "From Distances to Maps: Multidimensional Scaling"
 author: "Livio Finos, University of Padova"
 subtitle: "Unit 11 — Data Visualization"
 output:
-  pdf_document:
-    toc: true
-    toc_depth: 3
-    keep_tex: true
   html_document:
     toc: true
     toc_float: true
@@ -19,6 +15,10 @@ output:
     mathjax: null
     pandoc_args: ["--mathml"]
     df_print: paged
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    keep_tex: true
 lang: en
 ---
 
@@ -227,23 +227,6 @@ jaccard_distance(site_a, site_b)
 Use Jaccard for occurrence data, tags or sets. It is not a natural choice when
 the original measurements are abundances and their magnitude is meaningful.
 
-## Bray--Curtis distance: composition with abundances
-
-For non-negative abundance vectors, Bray--Curtis distance is
-
-\[
-d_{BC}(x_i,x_j)=
-\frac{\sum_{k=1}^p |x_{ik}-x_{jk}|}
-     {\sum_{k=1}^p(x_{ik}+x_{jk})}.
-\]
-
-It lies between zero and one. A feature absent from both objects contributes
-neither to the numerator nor the denominator. Consequently, it is popular for
-species abundance, microbial communities, market baskets and other composition
-data with many zeros.
-
-Bray--Curtis is a valid and useful dissimilarity, but it is not generally an
-exact Euclidean distance. That fact will become visible in its MDS eigenvalues.
 
 # A Euclidean distance needs standardisation when units differ
 
@@ -445,6 +428,25 @@ hellinger <- sqrt(relative_abundance)
 d_hellinger <- dist(hellinger, method = "euclidean")
 ```
 
+## Bray--Curtis distance: composition with abundances
+
+For non-negative abundance vectors, Bray--Curtis distance is
+
+\[
+d_{BC}(x_i,x_j)=
+\frac{\sum_{k=1}^p |x_{ik}-x_{jk}|}
+     {\sum_{k=1}^p(x_{ik}+x_{jk})}.
+\]
+
+It lies between zero and one. A feature absent from both objects contributes
+neither to the numerator nor the denominator. Consequently, it is popular for
+species abundance, microbial communities, market baskets and other composition
+data with many zeros.
+
+Bray--Curtis is a valid and useful dissimilarity, but it is not generally an
+exact Euclidean distance. That fact will become visible in its MDS eigenvalues.
+
+
 ## Hellinger transformation: composition in Euclidean geometry
 
 For each site, Hellinger transformation first changes cover scores into a
@@ -589,7 +591,7 @@ Double-centring converts squared distances into a Gram matrix:
 B=-\frac{1}{2}JD^{(2)}J.
 \]
 
-For exactly Euclidean distances, \(B\) is the centred inner-product matrix
+For exactly Euclidean distances, \(B\) is the centred inner-product matrix  
 \(X_cX_c^T\), where \(X_c\) denotes centred coordinates. It is symmetric and
 positive semidefinite.
 
@@ -888,12 +890,23 @@ the data-generating and sampling context, state the competing definitions of
 similarity, and report the sensitivity.
 
 ```{r shepard-plot, fig.cap="A Shepard-style plot compares original Bray--Curtis dissimilarities with distances on the two-dimensional MDS map. Points close to the diagonal would indicate perfect reproduction."}
+library(patchwork)
 shepard <- tibble(original = as.vector(d_bray), map = as.vector(map_d))
-ggplot(shepard, aes(original, map)) +
+p1=ggplot(shepard, aes(original, map)) +
   geom_point(size = 2.5, colour = blue, alpha = .8) +
   geom_abline(slope = 1, intercept = 0, linetype = 2, colour = orange) +
   coord_equal(xlim = c(0,1)) + 
   labs(title = "How faithfully does the map reproduce distance?", x = "Original Bray--Curtis dissimilarity", y = "Distance in the 2D MDS map")
+
+
+shepard <- tibble(original = as.vector(d_hellinger), map = as.vector(map_d))
+p2=ggplot(shepard, aes(original, map)) +
+  geom_point(size = 2.5, colour = blue, alpha = .8) +
+  geom_abline(slope = 1, intercept = 0, linetype = 2, colour = orange) +
+  coord_equal(xlim = c(0,1)) + 
+  labs(title = "How faithfully does the map reproduce distance?", x = "Hellinger distance", y = "Distance in the 2D MDS map")
+
+p1+p2
 ```
 
 # Classical MDS and non-metric MDS

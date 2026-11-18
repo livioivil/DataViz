@@ -471,24 +471,6 @@ Use Jaccard for occurrence data, tags or sets. It is not a natural
 choice when the original measurements are abundances and their magnitude
 is meaningful.
 
-\subsection{Bray--Curtis distance: composition with
-abundances}\label{braycurtis-distance-composition-with-abundances}
-
-For non-negative abundance vectors, Bray--Curtis distance is
-
-\[d_{BC}(x_i,x_j)=
-\frac{\sum_{k=1}^p |x_{ik}-x_{jk}|}
-     {\sum_{k=1}^p(x_{ik}+x_{jk})}.\]
-
-It lies between zero and one. A feature absent from both objects
-contributes neither to the numerator nor the denominator. Consequently,
-it is popular for species abundance, microbial communities, market
-baskets and other composition data with many zeros.
-
-Bray--Curtis is a valid and useful dissimilarity, but it is not
-generally an exact Euclidean distance. That fact will become visible in
-its MDS eigenvalues.
-
 \section{A Euclidean distance needs standardisation when units
 differ}\label{a-euclidean-distance-needs-standardisation-when-units-differ}
 
@@ -895,6 +877,24 @@ distance.
 \end{Highlighting}
 \end{Shaded}
 
+\subsection{Bray--Curtis distance: composition with
+abundances}\label{braycurtis-distance-composition-with-abundances}
+
+For non-negative abundance vectors, Bray--Curtis distance is
+
+\[d_{BC}(x_i,x_j)=
+\frac{\sum_{k=1}^p |x_{ik}-x_{jk}|}
+     {\sum_{k=1}^p(x_{ik}+x_{jk})}.\]
+
+It lies between zero and one. A feature absent from both objects
+contributes neither to the numerator nor the denominator. Consequently,
+it is popular for species abundance, microbial communities, market
+baskets and other composition data with many zeros.
+
+Bray--Curtis is a valid and useful dissimilarity, but it is not
+generally an exact Euclidean distance. That fact will become visible in
+its MDS eigenvalues.
+
 \subsection{Hellinger transformation: composition in Euclidean
 geometry}\label{hellinger-transformation-composition-in-euclidean-geometry}
 
@@ -1171,8 +1171,9 @@ Double-centring converts squared distances into a Gram matrix:
 \[B=-\frac{1}{2}JD^{(2)}J.\]
 
 For exactly Euclidean distances, \(B\) is the centred inner-product
-matrix \(X_cX_c^T\), where \(X_c\) denotes centred coordinates. It is
-symmetric and positive semidefinite.
+matrix\\
+\(X_cX_c^T\), where \(X_c\) denotes centred coordinates. It is symmetric
+and positive semidefinite.
 
 \begin{Shaded}
 \begin{Highlighting}[]
@@ -1787,12 +1788,23 @@ the competing definitions of similarity, and report the sensitivity.
 
 \begin{Shaded}
 \begin{Highlighting}[]
+\FunctionTok{library}\NormalTok{(patchwork)}
 \NormalTok{shepard }\OtherTok{\textless{}{-}} \FunctionTok{tibble}\NormalTok{(}\AttributeTok{original =} \FunctionTok{as.vector}\NormalTok{(d\_bray), }\AttributeTok{map =} \FunctionTok{as.vector}\NormalTok{(map\_d))}
-\FunctionTok{ggplot}\NormalTok{(shepard, }\FunctionTok{aes}\NormalTok{(original, map)) }\SpecialCharTok{+}
+\NormalTok{p1}\OtherTok{=}\FunctionTok{ggplot}\NormalTok{(shepard, }\FunctionTok{aes}\NormalTok{(original, map)) }\SpecialCharTok{+}
   \FunctionTok{geom\_point}\NormalTok{(}\AttributeTok{size =} \FloatTok{2.5}\NormalTok{, }\AttributeTok{colour =}\NormalTok{ blue, }\AttributeTok{alpha =} \FloatTok{.8}\NormalTok{) }\SpecialCharTok{+}
   \FunctionTok{geom\_abline}\NormalTok{(}\AttributeTok{slope =} \DecValTok{1}\NormalTok{, }\AttributeTok{intercept =} \DecValTok{0}\NormalTok{, }\AttributeTok{linetype =} \DecValTok{2}\NormalTok{, }\AttributeTok{colour =}\NormalTok{ orange) }\SpecialCharTok{+}
   \FunctionTok{coord\_equal}\NormalTok{(}\AttributeTok{xlim =} \FunctionTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{1}\NormalTok{)) }\SpecialCharTok{+} 
   \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"How faithfully does the map reproduce distance?"}\NormalTok{, }\AttributeTok{x =} \StringTok{"Original Bray{-}{-}Curtis dissimilarity"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Distance in the 2D MDS map"}\NormalTok{)}
+
+
+\NormalTok{shepard }\OtherTok{\textless{}{-}} \FunctionTok{tibble}\NormalTok{(}\AttributeTok{original =} \FunctionTok{as.vector}\NormalTok{(d\_hellinger), }\AttributeTok{map =} \FunctionTok{as.vector}\NormalTok{(map\_d))}
+\NormalTok{p2}\OtherTok{=}\FunctionTok{ggplot}\NormalTok{(shepard, }\FunctionTok{aes}\NormalTok{(original, map)) }\SpecialCharTok{+}
+  \FunctionTok{geom\_point}\NormalTok{(}\AttributeTok{size =} \FloatTok{2.5}\NormalTok{, }\AttributeTok{colour =}\NormalTok{ blue, }\AttributeTok{alpha =} \FloatTok{.8}\NormalTok{) }\SpecialCharTok{+}
+  \FunctionTok{geom\_abline}\NormalTok{(}\AttributeTok{slope =} \DecValTok{1}\NormalTok{, }\AttributeTok{intercept =} \DecValTok{0}\NormalTok{, }\AttributeTok{linetype =} \DecValTok{2}\NormalTok{, }\AttributeTok{colour =}\NormalTok{ orange) }\SpecialCharTok{+}
+  \FunctionTok{coord\_equal}\NormalTok{(}\AttributeTok{xlim =} \FunctionTok{c}\NormalTok{(}\DecValTok{0}\NormalTok{,}\DecValTok{1}\NormalTok{)) }\SpecialCharTok{+} 
+  \FunctionTok{labs}\NormalTok{(}\AttributeTok{title =} \StringTok{"How faithfully does the map reproduce distance?"}\NormalTok{, }\AttributeTok{x =} \StringTok{"Hellinger distance"}\NormalTok{, }\AttributeTok{y =} \StringTok{"Distance in the 2D MDS map"}\NormalTok{)}
+
+\NormalTok{p1}\SpecialCharTok{+}\NormalTok{p2}
 \end{Highlighting}
 \end{Shaded}
 
