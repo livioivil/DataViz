@@ -3,6 +3,9 @@ title: "Student Activity 5: Mapping mixed customer profiles"
 author: "Livio Finos, University of Padova"
 subtitle: "Distance design with mixed variables · Class activity and homework"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
   html_document:
     toc: true
     toc_float: true
@@ -222,6 +225,13 @@ tables and figures (appendix code does not count).
 | Reproducibility | Code runs from the course folder and uses the supplied CSV. |
 | Critical reasoning | Sensitivity comparison and a limitation stated clearly. |
 
+# Compare and revise
+
+Exchange reports or displays with another group. Compare variable types, binary
+convention, weights, close/distant pairs and map claims. If results differ, trace
+the difference to a documented choice. Revise your report and state one point of
+agreement, one difference and one change you made (or explain why no change was
+needed).
 
 ## Required report sections
 
@@ -231,6 +241,7 @@ tables and figures (appendix code does not count).
 | Manual audit | Two partial hand calculations, predictions and explanation of Gower components |
 | Baseline results | Pair table, source-variable comparison, MDS map and distance-reproduction plot |
 | Sensitivity analysis | Weight and scope comparisons, with stable and changed conclusions |
+| Comparison and revision | What another group revealed and how the final report changed |
 | Reproducibility and AI appendix | Code, package versions, decision log, relevant prompts and AI statement |
 
 An AI-assistance statement can follow this template, adapted to the work actually

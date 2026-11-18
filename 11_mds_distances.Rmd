@@ -3,6 +3,10 @@ title: "From Distances to Maps: Multidimensional Scaling"
 author: "Livio Finos, University of Padova"
 subtitle: "Unit 11 — Data Visualization"
 output:
+  pdf_document:
+    toc: true
+    toc_depth: 3
+    keep_tex: true
   html_document:
     toc: true
     toc_float: true
@@ -12,6 +16,8 @@ output:
     theme: readable
     fig_caption: true
     self_contained: true
+    mathjax: null
+    pandoc_args: ["--mathml"]
     df_print: paged
 lang: en
 ---
@@ -131,9 +137,30 @@ they are squared. It is appropriate when the variables define meaningful
 Cartesian coordinates, or when a straight-line geometry is substantively useful.
 
 ```{r euclidean-example}
-x <- c(1, 2, 4)
-y <- c(4, 2, 1)
-sqrt(sum((x - y)^2))
+pair_index <- combn(seq_len(nrow(points3)), 2)
+euclidean_calculations <- apply(pair_index, 2, function(index) {
+  first <- points3[index[1], ]
+  second <- points3[index[2], ]
+  tibble(
+    pair = paste(rownames(points3)[index], collapse = "--"),
+    calculation = sprintf("sqrt((%g - %g)^2 + (%g - %g)^2)",
+                        first[1], second[1], first[2], second[2]),
+    distance = sqrt(sum((first - second)^2))
+  )
+}) |> bind_rows()
+knitr::kable(euclidean_calculations, digits = 2,
+             caption = "Coordinate-by-coordinate Euclidean calculations.")
+
+D_euclidean_points3 <- matrix(0, nrow(points3), nrow(points3),
+                              dimnames = list(rownames(points3), rownames(points3)))
+for (i in seq_len(nrow(points3) - 1)) {
+  for (j in (i + 1):nrow(points3)) {
+    D_euclidean_points3[i, j] <- D_euclidean_points3[j, i] <-
+      sqrt(sum((points3[i, ] - points3[j, ])^2))
+  }
+}
+knitr::kable(D_euclidean_points3, digits = 2,
+             caption = "Euclidean distance matrix, assembled from the displayed calculations.")
 ```
 
 ## Manhattan distance: total coordinate-wise change
@@ -149,7 +176,29 @@ coordinate difference than Euclidean distance. It can be motivated by movement
 along a grid, but it is also a general robust alternative for numerical profiles.
 
 ```{r manhattan-example}
-sum(abs(x - y))
+manhattan_calculations <- apply(pair_index, 2, function(index) {
+  first <- points3[index[1], ]
+  second <- points3[index[2], ]
+  tibble(
+    pair = paste(rownames(points3)[index], collapse = "--"),
+    calculation = sprintf("abs(%g - %g) + abs(%g - %g)",
+                        first[1], second[1], first[2], second[2]),
+    distance = sum(abs(first - second))
+  )
+}) |> bind_rows()
+knitr::kable(manhattan_calculations, digits = 2,
+             caption = "Coordinate-by-coordinate Manhattan calculations.")
+
+D_manhattan_points3 <- matrix(0, nrow(points3), nrow(points3),
+                              dimnames = list(rownames(points3), rownames(points3)))
+for (i in seq_len(nrow(points3) - 1)) {
+  for (j in (i + 1):nrow(points3)) {
+    D_manhattan_points3[i, j] <- D_manhattan_points3[j, i] <-
+      sum(abs(points3[i, ] - points3[j, ]))
+  }
+}
+knitr::kable(D_manhattan_points3, digits = 2,
+             caption = "Manhattan distance matrix, assembled from the displayed calculations.")
 ```
 
 ## Jaccard distance: presence and absence of features
@@ -218,6 +267,55 @@ This does **not** make it universally better: it says that one standard deviatio
 of age, ICV, motion, sleep, stress, memory or hippocampal volume deserves equal
 weight. That is a substantive choice. Identifiers and binary/categorical fields
 must not be silently treated as continuous measurements.
+
+## A two-dimensional scale-change example
+
+The following four illustrative profiles have age in years and ICV in cubic
+centimetres. In the raw plot, profile B differs greatly from A in age but only
+slightly in ICV; profile C has almost the same age as A but a much larger ICV.
+Raw Euclidean distance calls B closer to A because the 200-unit ICV difference
+to C dominates. After z-scoring, C becomes closer because the age difference
+between A and B is large relative to the observed age variation.
+
+```{r two-dimensional-standardisation, fig.width=10, fig.height=5, fig.cap="The nearest profile to A changes after both variables are put on their standard-deviation scale. Segments compare A--B (orange) and A--C (green)."}
+profile_2d <- rbind(A = c(age = 20, ICV = 1500),
+                    B = c(age = 50, ICV = 1510),
+                    C = c(age = 21, ICV = 1700),
+                    D = c(age = 35, ICV = 2500))
+profile_2d_z <- scale(profile_2d)
+D_raw_2d <- as.matrix(dist(profile_2d))
+D_z_2d <- as.matrix(dist(profile_2d_z))
+
+comparison_to_A <- tibble(
+  profile = c("B", "C"),
+  raw_distance_to_A = D_raw_2d["A", c("B", "C")],
+  z_scored_distance_to_A = D_z_2d["A", c("B", "C")]
+)
+knitr::kable(comparison_to_A, digits = 2,
+             caption = "The nearest profile to A changes from B to C after z-scoring.")
+knitr::kable(D_raw_2d, digits = 1, caption = "Raw Euclidean distance matrix.")
+knitr::kable(D_z_2d, digits = 2, caption = "Euclidean distance matrix after z-scoring.")
+
+old_par <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+plot(profile_2d[, "age"], profile_2d[, "ICV"], pch = 19, col = blue,
+     xlab = "Age (years)", ylab = "ICV (cm^3)", main = "Raw coordinates")
+segments(profile_2d["A", "age"], profile_2d["A", "ICV"],
+         profile_2d["B", "age"], profile_2d["B", "ICV"], col = orange, lwd = 2)
+segments(profile_2d["A", "age"], profile_2d["A", "ICV"],
+         profile_2d["C", "age"], profile_2d["C", "ICV"], col = green, lwd = 2)
+text(profile_2d[, "age"], profile_2d[, "ICV"], labels = rownames(profile_2d), pos = 3)
+plot(profile_2d_z[, "age"], profile_2d_z[, "ICV"], pch = 19, col = blue,
+     xlab = "Age (z-score)", ylab = "ICV (z-score)", main = "After z-scoring")
+segments(profile_2d_z["A", "age"], profile_2d_z["A", "ICV"],
+         profile_2d_z["B", "age"], profile_2d_z["B", "ICV"], col = orange, lwd = 2)
+segments(profile_2d_z["A", "age"], profile_2d_z["A", "ICV"],
+         profile_2d_z["C", "age"], profile_2d_z["C", "ICV"], col = green, lwd = 2)
+text(profile_2d_z[, "age"], profile_2d_z[, "ICV"], labels = rownames(profile_2d_z), pos = 3)
+legend("topleft", legend = c("A--B", "A--C"), col = c(orange, green), lwd = 2, bty = "n")
+par(old_par)
+```
+
 
 ```{r euclidean-standardisation-example}
 brain <- read_csv("data/hippocampus_memory_age_continuous.csv", show_col_types = FALSE)
@@ -444,51 +542,175 @@ MDS receives a distance matrix and returns coordinates. Classical MDS finds a
 Euclidean configuration whose interpoint distances reproduce the input as closely
 as possible. The configuration can then be plotted just like ordinary coordinates.
 
-## The spectral-decomposition connection
+## Spectral decomposition, one matrix at a time
 
-Let \(D^{(2)}\) be the matrix with entries \(d_{ij}^2\), and let
+The construction is easiest to see with only three objects. Reuse the three
+points introduced earlier: A = (0, 0), B = (3, 4), and C = (3, 0). We know
+their geometry, so we can check whether MDS recovers it from distances alone.
+The coordinates are used only to create the example; every following step uses
+the distance matrix.
+
+### Step 1 — distances and squared distances
+
+Let \(D\) contain the pairwise distances and let \(D^{(2)}\) contain their
+squares:
 
 \[
-J=I_n-\frac{1}{n}\mathbf{1}\mathbf{1}^T
+D=(d_{ij}), \qquad D^{(2)}=(d_{ij}^2).
 \]
 
-be the centring matrix. Classical MDS constructs
+```{r spectral-step-1}
+X_original <- rbind(A = c(0, 0), B = c(3, 4), C = c(3, 0))
+d_orig <- tibble(object = rownames(X_original), x = X_original[, 1], y = X_original[, 2])
+D <- as.matrix(dist(X_original))
+D2 <- D^2
+
+knitr::kable(d_orig, digits = 2, caption = "Original two-dimensional coordinates used only to create this small example.")
+knitr::kable(D, digits = 2, caption = "Step 1a: distance matrix D.")
+knitr::kable(D2, digits = 2, caption = "Step 1b: squared-distance matrix D^(2).")
+
+plot(d_orig$x, d_orig$y, asp = 1, pch = 19, col = blue, xlab = "Original coordinate 1",
+     ylab = "Original coordinate 2", main = "Original data: d_orig",
+     xlim = c(-1, 4), ylim = c(-1, 5))
+text(d_orig$x, d_orig$y, labels = d_orig$object, pos = 3)
+```
+
+### Step 2 — centre the squared distances
+
+With \(n=3\), the centring matrix is
 
 \[
-B=-\frac12 JD^{(2)}J.
+J=I_n-\frac{1}{n}\mathbf{1}\mathbf{1}^T.
 \]
 
-If the input distances are Euclidean, \(B\) is the centred Gram matrix
-\(XX^T\). It is symmetric and positive semidefinite. By the spectral theorem,
+Double-centring converts squared distances into a Gram matrix:
+
+\[
+B=-\frac{1}{2}JD^{(2)}J.
+\]
+
+For exactly Euclidean distances, \(B\) is the centred inner-product matrix
+\(X_cX_c^T\), where \(X_c\) denotes centred coordinates. It is symmetric and
+positive semidefinite.
+
+```{r spectral-step-2}
+n <- nrow(D)
+J <- diag(n) - matrix(1 / n, n, n)
+B <- -0.5 * J %*% D2 %*% J
+
+knitr::kable(J, digits = 3, caption = "Step 2a: centring matrix J.")
+knitr::kable(B, digits = 3, caption = "Step 2b: centred Gram matrix B.")
+```
+
+### Step 3 — spectral decomposition of B
+
+Because \(B\) is real and symmetric, the spectral theorem gives
 
 \[
 B=Q\Lambda Q^T,
 \]
 
-where \(Q\) contains orthonormal eigenvectors and \(\Lambda\) contains real
-eigenvalues. Retaining the \(r\) positive eigenvalues gives coordinates
+where the columns of \(Q\) are orthonormal eigenvectors and \(\Lambda\) is a
+diagonal matrix of eigenvalues. The number of positive eigenvalues is the
+dimension needed for an exact Euclidean representation (apart from numerical
+rounding).
+
+```{r spectral-step-3}
+decomposition <- eigen(B, symmetric = TRUE)
+Q <- decomposition$vectors
+Lambda <- diag(decomposition$values)
+rownames(Q) <- rownames(D)
+rownames(Lambda) <- colnames(Lambda) <- paste0("lambda", seq_len(n))
+colnames(Q) <- paste0("q", seq_len(n))
+
+knitr::kable(Q, digits = 3, caption = "Step 3a: eigenvector matrix Q.")
+knitr::kable(Lambda, digits = 3, caption = "Step 3b: diagonal eigenvalue matrix Lambda.")
+knitr::kable(tibble(dimension = seq_len(n), eigenvalue = decomposition$values),
+             digits = 3, caption = "Step 3c: eigenvalues in descending order.")
+
+q_plot <- tibble(object = rownames(Q), q1 = Q[, 1], q2 = Q[, 2])
+plot(q_plot$q1, q_plot$q2, asp = 1, pch = 19, col = orange,
+     xlab = "First eigenvector q1", ylab = "Second eigenvector q2",
+     main = "Eigenvector coordinates: q1 and q2")
+abline(h = 0, v = 0, col = "grey80")
+text(q_plot$q1, q_plot$q2, labels = q_plot$object, pos = 3)
+```
+
+### Step 4 — recover coordinates
+
+Retain the \(r\) positive eigenvalues and their eigenvectors. If \(Q_r\) and
+\(\Lambda_r\) are the retained matrices, the MDS coordinates are
 
 \[
-X_r=Q_r\Lambda_r^{1/2}.
+X=Q_r\Lambda_r^{1/2}.
 \]
 
-This is not a black-box connection: eigenvectors provide map directions, while
-eigenvalues quantify how much centred squared-distance structure those directions
-represent.
+The recovered \(X\) can be translated, rotated or reflected relative to
+X_original; those transformations leave its distances unchanged.
+
+```{r spectral-step-4}
+positive <- which(decomposition$values > 1e-10)
+Q_r <- Q[, positive, drop = FALSE]
+Lambda_r <- diag(decomposition$values[positive], nrow = length(positive))
+X <- Q_r %*% sqrt(Lambda_r)
+rownames(X) <- rownames(D)
+colnames(X) <- paste0("MDS", seq_len(ncol(X)))
+
+X_table <- tibble(object = rownames(X), MDS1 = X[, 1], MDS2 = X[, 2])
+knitr::kable(d_orig, digits = 3, caption = "Step 4a: original coordinates d_orig.")
+knitr::kable(X_table, digits = 3, caption = "Step 4b: coordinates X recovered by classical MDS.")
+
+old_par <- par(no.readonly = TRUE)
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+common_limits <- range(c(d_orig$x, d_orig$y, X[, 1], X[, 2]))
+common_limits <- common_limits + c(-.4, .4)
+plot(d_orig$x, d_orig$y, asp = 1, pch = 19, col = blue,
+     xlab = "Coordinate 1", ylab = "Coordinate 2", main = "Original d_orig",
+     xlim = common_limits, ylim = common_limits)
+text(d_orig$x, d_orig$y, labels = d_orig$object, pos = 3)
+plot(X[, 1], X[, 2], asp = 1, pch = 19, col = green,
+     xlab = "MDS1", ylab = "MDS2", main = "Recovered X",
+     xlim = common_limits, ylim = common_limits)
+text(X[, 1], X[, 2], labels = rownames(X), pos = 3)
+par(old_par)
+```
+
+This is the whole classical-MDS mechanism. It is not a black box: eigenvectors
+provide the coordinate directions, while eigenvalues quantify how much centred
+squared-distance structure those directions represent.
+
+## The same objects in a reusable function
+
+The function below uses the same names as the derivation: D, D2, J, B, Q,
+Lambda and X. Its return value retains each object so that its calculation can
+be inspected after fitting a larger dataset.
+
+If B has a materially negative eigenvalue, its associated diagonal entry in
+Lambda has no real square root. We therefore cannot turn that component into
+real Euclidean coordinates. The function retains only positive eigenvalues:
+its X is a Euclidean approximation, but it cannot reconstruct the original D
+exactly when negative eigenvalues are present.
 
 ```{r manual-mds}
-classical_mds <- function(d, k = 2) {
-  D2 <- as.matrix(d)^2
-  n <- nrow(D2)
+classical_mds <- function(D, k = 2, tolerance = 1e-10) {
+  D <- as.matrix(D)
+  D2 <- D^2
+  n <- nrow(D)
   J <- diag(n) - matrix(1 / n, n, n)
   B <- -0.5 * J %*% D2 %*% J
-  eig <- eigen(B, symmetric = TRUE)
-  positive <- which(eig$values > 1e-10)
+
+  decomposition <- eigen(B, symmetric = TRUE)
+  Q <- decomposition$vectors
+  Lambda <- diag(decomposition$values)
+  positive <- which(decomposition$values > tolerance)
   keep <- positive[seq_len(min(k, length(positive)))]
-  coordinates <- eig$vectors[, keep, drop = FALSE] %*%
-    diag(sqrt(eig$values[keep]), nrow = length(keep))
-  rownames(coordinates) <- rownames(D2)
-  list(points = coordinates, eigenvalues = eig$values, B = B)
+  Q_r <- Q[, keep, drop = FALSE]
+  Lambda_r <- diag(decomposition$values[keep], nrow = length(keep))
+  X <- Q_r %*% sqrt(Lambda_r)
+  rownames(X) <- rownames(D)
+
+  list(D = D, D2 = D2, J = J, B = B, Q = Q, Lambda = Lambda,
+       X = X, eigenvalues = decomposition$values)
 }
 
 mds_bray <- classical_mds(d_bray, k = 2)
@@ -499,9 +721,9 @@ round(mds_bray$eigenvalues, 4)
 ## MDS map of the communities
 
 ```{r bray-mds-map, fig.width=8, fig.height=6, fig.cap="Classical MDS map based on Bray--Curtis dissimilarity. Colour records the observed management category; the map itself was computed using species cover classes only."}
-mds_df <- as.data.frame(mds_bray$points) |>
+mds_df <- as.data.frame(mds_bray$X) |>
   setNames(c("MDS1", "MDS2")) |>
-  mutate(site = rownames(mds_bray$points)) |>
+  mutate(site = rownames(mds_bray$X)) |>
   left_join(site_metadata |> select(site, Management, Moisture), by = "site")
 
 ggplot(mds_df, aes(MDS1, MDS2, colour = Management, label = site)) +
@@ -558,15 +780,22 @@ Choose \(k\) using all three pieces of evidence below:
    retained for later analysis without being drawn as a single map.
 
 Do not call the eigenvalue fraction “variance explained” without qualification:
-this is MDS of a distance matrix, not PCA of the original variables. Here it is a
-fraction of positive centred squared-distance structure.
+this is MDS of a distance matrix, not PCA of the original variables. Here we use
+the fraction of **absolute-eigenvalue structure**. Its denominator is
+\(\sum_j|\lambda_j|\), including negative eigenvalues. Thus even retaining every
+positive eigenvalue need not reach 100%: the remaining fraction is
+non-Euclidean structure that no real Euclidean coordinate system can reproduce
+exactly.
 
-```{r choose-dimensions, fig.width=9, fig.height=4, fig.cap="The positive-eigenvalue scree plot and its cumulative fraction help decide whether a two-dimensional map is an adequate simplification."}
+```{r choose-dimensions, fig.width=9, fig.height=4, fig.cap="The positive-eigenvalue scree plot and the cumulative absolute-eigenvalue fraction separate represented Euclidean structure from non-Euclidean structure."}
 positive_bray <- mds_bray$eigenvalues[mds_bray$eigenvalues > 1e-10]
+total_absolute_structure <- sum(abs(mds_bray$eigenvalues))
+negative_structure_fraction <- sum(abs(mds_bray$eigenvalues[mds_bray$eigenvalues < -1e-10])) /
+  total_absolute_structure
 dimension_summary <- tibble(
   dimension = seq_along(positive_bray),
   eigenvalue = positive_bray,
-  cumulative_fraction = cumsum(positive_bray) / sum(positive_bray)
+  cumulative_fraction = cumsum(positive_bray) / total_absolute_structure
 )
 
 p_scree <- ggplot(dimension_summary, aes(dimension, eigenvalue)) +
@@ -577,11 +806,18 @@ p_cumulative <- ggplot(dimension_summary, aes(dimension, cumulative_fraction)) +
   geom_line(colour = orange, linewidth = 1) +
   geom_point(colour = orange, size = 2.5) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1), limits = c(0, 1)) +
-  labs(title = "Cumulative positive-eigenvalue fraction", x = "Dimensions retained", y = "Fraction")
+  labs(title = "Cumulative absolute-eigenvalue fraction", x = "Dimensions retained",
+       y = "Fraction of total absolute structure")
 
 print(p_scree)
 print(p_cumulative)
+scales::percent(negative_structure_fraction, accuracy = .1)
 ```
+
+The printed percentage is the share of total absolute-eigenvalue structure
+carried by negative eigenvalues. It is the portion that will remain
+unreconstructable in any real Euclidean MDS configuration, regardless of how
+many positive dimensions are retained.
 
 # Reading MDS eigenvalues and fit
 
@@ -606,7 +842,7 @@ Two simple summaries are useful:
 abs_eigen <- abs(mds_bray$eigenvalues)
 variance_like_fit <- sum(abs_eigen[1:2]) / sum(abs_eigen)
 
-map_d <- dist(mds_bray$points)
+map_d <- dist(mds_bray$X)
 distance_correlation <- cor(as.vector(d_bray), as.vector(map_d))
 
 c(two_dimension_positive_eigenvalue_fraction = variance_like_fit,
@@ -628,11 +864,13 @@ exactly Euclidean input but can emphasise a different ecological contrast.
 ```{r metric-comparison}
 mds_summary <- function(d, fit) {
   eig <- fit$eigenvalues
-  absolute <- eig[eig > 1e-10]
-  map_distance <- dist(fit$points)
+  total_absolute_structure <- sum(abs(eig))
+  retained_absolute_structure <- sum(abs(eig[seq_len(min(2, length(eig)))]))
+  map_distance <- dist(fit$X)
   c(
     negative_eigenvalues = sum(eig < -1e-10),
-    two_dimension_absolute_fraction = sum(absolute[1:2]) / sum(absolute),
+    negative_absolute_fraction = sum(abs(eig[eig < -1e-10])) / total_absolute_structure,
+    two_dimension_absolute_fraction = retained_absolute_structure / total_absolute_structure,
     original_map_distance_correlation = cor(as.vector(d), as.vector(map_distance))
   )
 }

@@ -48,14 +48,6 @@
           "pdf": "04_reaction_time_analysis.pdf"
         },
         {
-          "id": "04-F",
-          "title": "Activity 2 · Feedback and worked example",
-          "description": "Consult after preparing your own report to compare analytical choices.",
-          "source": "04_student_activity2_reaction_time_feedback.Rmd",
-          "html": "04_student_activity2_reaction_time_feedback.html",
-          "pdf": "04_student_activity2_reaction_time_feedback.pdf"
-        },
-        {
           "id": "05",
           "title": "Boxplots: from distributions to models",
           "description": "Outliers.. it depends on the model.",
@@ -76,42 +68,48 @@
           "title": "Kernel Density Estimation: bandwidth and sample size",
           "description": "Explore bandwidth, sample size, kernel shapes, and boundary effects through real data and simulations.",
           "source": "07_kde_bandwidth_sample_size.Rmd",
-          "html": "07_kde_bandwidth_sample_size.html"
+          "html": "07_kde_bandwidth_sample_size.html",
+          "pdf": "07_kde_bandwidth_sample_size.pdf"
         },
         {
           "id": "08",
           "title": "Activity 4 · Confounding and categorical variables",
           "description": "Design and analyse a study of shoe size, reading scores and an age-related confounder.",
           "source": "08_student_activity4_confounders.Rmd",
-          "html": "08_student_activity4_confounders.html"
+          "html": "08_student_activity4_confounders.html",
+          "pdf": "08_student_activity4_confounders.pdf"
         },
         {
           "id": "09",
           "title": "Homework · Penguins: distributions, groups and hidden associations",
           "description": "Use species and sex to examine distributions and associations in penguin measurements.",
           "source": "09_homework_penguins_task.Rmd",
-          "html": "09_homework_penguins_task.html"
+          "html": "09_homework_penguins_task.html",
+          "pdf": "09_homework_penguins_task.pdf"
         },
         {
           "id": "10",
           "title": "LOESS: nonparametric trends and span selection",
           "description": "Explore local regression, span selection and the reliability of smoothed trends.",
           "source": "10_loess_nonparametric_trends.Rmd",
-          "html": "10_loess_nonparametric_trends.html"
+          "html": "10_loess_nonparametric_trends.html",
+          "pdf": "10_loess_nonparametric_trends.pdf"
         },
         {
           "id": "11",
           "title": "From Distances to Maps: Multidimensional Scaling",
           "description": "Define and compare distances, then use classical MDS and spectral decomposition to map non-textual multivariate data.",
           "source": "11_mds_distances.Rmd",
-          "html": "11_mds_distances.html"
+          "html": "11_mds_distances.html",
+          "pdf": "11_mds_distances.pdf"
         },
         {
           "id": "12",
           "title": "Activity 5 · Mapping mixed customer profiles",
           "description": "Design a Gower distance for numeric, ordinal, nominal and binary customer-profile variables, then map it with MDS.",
           "source": "12_student_activity5_mixed_distances.Rmd",
-          "html": "12_student_activity5_mixed_distances.html"
+          "html": "12_student_activity5_mixed_distances.html",
+          "pdf": "12_student_activity5_mixed_distances.pdf"
         }
       ]
     },

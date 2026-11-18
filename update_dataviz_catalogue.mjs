@@ -55,6 +55,17 @@ const upsert = (items, item) => {
 
 units.items.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 
+// The former 04-F feedback entry has no source or rendered file in this
+// repository. Do not publish a catalogue link that cannot resolve.
+units.items = units.items.filter(item => item.id !== "04-F");
+
+// Every course unit has a PDF alongside its Rmd source. Add its link only when
+// the generated file is present, so the catalogue never advertises a broken link.
+for (const item of units.items) {
+  const pdf = item.source.replace(/\.rmd$/i, ".pdf");
+  if (fs.existsSync(path.join(repo, pdf))) item.pdf = pdf;
+}
+
 let additional = catalogue.sections.find(section => section.title === "Additional materials");
 if (!additional) {
   additional = { title: "Additional materials", items: [] };
