@@ -77,7 +77,7 @@ one use of the resulting map that would be defensible versus one that would not.
 
 ```{r import-data, echo=FALSE}
 customers <- read_csv("data/customer_profiles.csv", show_col_types = FALSE) |>
-  mutate(
+ mutate(
     loyalty_tier = ordered(loyalty_tier, levels = c("Bronze", "Silver", "Gold", "Platinum")),
     preferred_channel = factor(preferred_channel),
     region = factor(region),
