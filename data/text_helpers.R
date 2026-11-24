@@ -7,7 +7,7 @@ course_stopwords <- strsplit(paste(
   "have has had do does did will would can could shall should may might",
   "there here which who whom what when where how also very just so than",
   "into about over under up down out all some any each both other such",
-  "it's i'm you're he's she's they're we've i've don't doesn't didn't"
+  "it's i'm you're he's she's they're we've i've don't doesn't didn't mr"
 ), " +")[[1]]
 # Deliberately retain no/not/never: stopword removal is not sentiment analysis.
 
