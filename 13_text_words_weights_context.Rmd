@@ -1,0 +1,968 @@
+---
+title: "Text as Data: Words, Weights and Context"
+author: "Livio Finos, University of Padova"
+subtitle: "A Course on Data Visualization"
+output:
+  pdf_document:
+    keep_tex: true
+    fig_crop: false
+    toc: true
+    toc_depth: 3
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    theme: readable
+    fig_caption: true
+    self_contained: true
+    df_print: paged
+    mathjax: null
+    pandoc_args: ["--mathml"]
+geometry: margin=2cm
+fontsize: 10pt
+papersize: a4
+header-includes:
+  - \usepackage{float}
+lang: en
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE, message = FALSE, warning = TRUE,
+  fig.width = 8, fig.height = 5, fig.align = "center",
+  dpi = 120, comment = "#>", out.width = "100%",
+  fig.pos = "H"
+)
+options(width = 74)
+blue <- "#0072B2"
+orange <- "#D55E00"
+green <- "#009E73"
+purple <- "#CC79A7"
+```
+
+
+# The question we will investigate
+
+**Main question:** How do our choices about representing text change what we see?
+
+Units 11 and 12 compared objects through distances. We now need to decide what
+the measurements of a text document should be. Before making a map, we will
+read texts, count words, choose weights, and check how much context is lost.
+
+Use these notes during class and keep them for review. Every worked BBC example
+is followed by a task on **a different corpus: SMS messages**. This transfer is
+deliberate: short informal messages need not behave like news articles.
+
+A **token** is one occurrence of a small piece of text produced by a splitting
+rule. In this unit, think of it informally as a **word occurrence**: `tea tea
+cake` contains three tokens, even though it has only two different word forms.
+**Tokenisation** means splitting text into these units. We will examine the
+precise splitting and filtering rules later; this first definition lets us
+describe document length before studying those choices.
+
+## Learning goals
+
+- Define a document, a token, metadata and a document-term matrix (DTM).
+- Explain how tokenisation and vocabulary filtering alter the data.
+- Distinguish counts, relative frequencies and TF-IDF weights.
+- Compare word clouds with ordered bars and interpret n-grams in context.
+- Read directed bigram networks and use their paths to propose longer phrases
+  that can be checked in the original texts.
+- Keep a reproducible record of decisions and their consequences.
+
+## What you need
+
+**Prerequisites:** R indexing, tables, proportions, simple plots and matrices.
+**R packages:** `ggplot2`, `knitr` and `rmarkdown`. The inspectable helpers in
+`data/text_helpers.R` use base R; no specialist text-mining package is required.
+
+Open the course folder (the folder containing these Rmd files and `data/`).
+Keep a script called `13_my_text_lab.R`. Append an answer after each activity;
+do not overwrite earlier results when changing a setting. A useful entry is
+**prediction -> code -> output -> interpretation -> limitation**.
+
+# Data and context
+
+The guided corpus contains 250 **real BBC articles**, 50 in each of five topics.
+Your activity corpus contains 240 **real SMS messages**, 120 labelled `ham`
+(ordinary messages) and 120 `spam`. Exact text duplicates were removed before
+sampling. The full downloaded archives contained 2,225 BBC articles and 5,574
+SMS rows; after exact-text deduplication, 2,127 and 5,171 unique texts remained.
+
+One complete article or message is one document. Sentences are temporary units
+for extracting adjacent words; they will not become separate MDS points.
+
+| Column | Meaning | Analytical role |
+|:--|:--|:--|
+| `document_id` | Unique retained document | Row label |
+| `text` | Original complete text | Source of features |
+| `category` | BBC topic or SMS label | Metadata; excluded from word features |
+| `source_id` | Original file path or row | Traceability |
+| `raw_tokens` | Baseline token count, calculated by the import helper | Derived document-length measure; not an original CSV column |
+
+The files retain the original text. English ASCII-letter tokenisation below is
+a simple baseline, not a language-independent linguistic parser. These older
+corpora do not represent all present-day news or messaging.
+
+```{r local-data}
+library(ggplot2)
+theme_set(theme_minimal(base_size = 12))
+source("data/text_helpers.R")
+bbc <- load_text_docs("data/bbc_articles_250.csv")
+sms <- load_text_docs("data/sms_messages_240.csv")
+```
+
+
+# Begin with documents, not with a cloud
+
+Read a few articles before calculating summaries. Check identifiers, category
+counts and length. The import helper creates `raw_tokens`: the **number of
+baseline word tokens in each complete document**, counting repeated occurrences.
+For this initial count it lowercases text, recognises English-letter sequences
+with internal apostrophes, drops single-letter words and excludes numeric
+tokens. It has not yet removed stopwords or applied a document-frequency filter.
+
+Thus `raw_tokens` is a document-length measure, not a list of tokens or a count
+of distinct words. It follows the stated rule rather than a universal definition
+of a word. We will inspect and change that rule in the next section.
+
+```{r bbc-audit, fig.cap="Each point is an article, not a word. Boxplots summarise article-length distributions."}
+table(bbc$category)
+summary(bbc$raw_tokens)
+head(bbc[c("document_id", "category", "raw_tokens")])
+# Read the full first article in the R console when discussing its context:
+# cat(bbc$text[1])
+ggplot(bbc, aes(category, raw_tokens)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_point(position = position_jitter(width = 0.12, seed = 13),
+             alpha = 0.3) +
+  labs(x = "BBC topic", y = "Baseline tokens per article")
+```
+
+
+**Reading the figure.** The vertical scale is document length. Different topics
+can have different typical lengths, and documents in the same topic also vary.
+A larger total word count in a group could reflect longer texts, more texts,
+or both. Labels are useful for checking our map later, not for defining distance.
+
+## Activity A1: Define and audit the observational unit
+
+**Your dataset: SMS. Question:** Are the SMS messages comparable in length and how does their unit differ from a news article?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Verify identifiers, missing text and category counts. Read two messages per label.
+2. Report median and range of baseline token counts by label and make a length plot.
+3. Explain why a balanced sample cannot estimate the prevalence of spam.
+
+
+```{r activity-a1, eval=FALSE}
+table(sms$category)
+summary(sms$raw_tokens)
+# Add the within-label summaries, plot and four contextual readings.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# Decide what becomes a token
+
+Our `word_tokens()` function lowercases text, recognises letter sequences
+with internal apostrophes, and discards single-letter words. Its optional
+numeric-token rule retains digit sequences. Punctuation, emojis, URLs and
+hyphens are not interpreted semantically; URL pieces can survive as words.
+Inspect the function before treating its output as a complete description.
+
+A **stopword list** removes selected common words. It is a modelling choice,
+not an objective definition of useless language. Our short supplied list keeps
+`no`, `not` and `never`, and removes the honorific `mr`. This domain-specific
+choice reduces a common form of address; it does not remove people's names
+or every reporting expression (`said`, for example, is retained). Check
+contractions and domain-specific expressions before interpreting meaning or
+sentiment.
+
+The initial `raw_tokens` measure is calculated before stopword removal, so
+it still counts occurrences of `mr`. The cleaned unigram vocabulary does not.
+Removing `mr` also changes the retained-token denominator in articles that
+contain it, so other terms' TF and TF-IDF values can change. If the retained
+document set stays the same, the other unigrams' document frequencies and
+IDFs remain unchanged. Recompute the profiles and category summaries rather
+than just deleting a label from an old graph.
+
+```{r cleaning, fig.cap="Corpus-level counts: a long article contributes more tokens than a short article."}
+bbc_tokens <- word_tokens(bbc$text)
+bbc_clean <- word_tokens(bbc$text, stop_words = course_stopwords)
+raw_counts <- term_counts(bbc_tokens)
+clean_counts <- term_counts(bbc_clean)
+head(raw_counts, 10)
+head(clean_counts, 10)
+top_bars(setNames(clean_counts$count, clean_counts$term),
+         "BBC: frequent retained words", ylab = "Token occurrences")
+```
+
+
+**Interpretation.** Removal changes both the vocabulary and the denominator of
+later proportions. A term can become relatively frequent without gaining any
+occurrences. Names, abbreviations and spelling variants remain separate forms.
+
+**Stemming** reduces related forms to a common stem (possibly not a word).
+**Lemmatisation** aims at dictionary forms using linguistic information. Neither
+is applied in the core analysis. For example, combining `run` and `running`
+changes a column definition; a guessed suffix rule is not reliable lemmatisation.
+
+## Activity A2: Change one preprocessing choice
+
+**Your dataset: SMS. Question:** Which aspects of SMS language are lost when common words or numbers are removed?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Compare the top ten tokens with and without the supplied stopwords.
+2. Holding the stopword rule fixed, compare tokens with `numbers=FALSE` and `TRUE`.
+3. Find one affected message and explain what was lost. Audit the list for negation.
+4. Use `grep()` on token names to find related word forms; propose one merge
+   and one reason it might be inappropriate. Do not implement guessed lemmatisation.
+
+
+```{r activity-a2, eval=FALSE}
+sms_words <- word_tokens(sms$text)
+sms_clean <- word_tokens(sms$text, stop_words = course_stopwords)
+# Compare term_counts(), numeric tokens, and an original message.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# From words to a common document-term matrix
+
+Let $C_{it}$ count term $t$ in document $i$. Every row uses the **same vocabulary**.
+Rows are documents and columns are terms; metadata never enter this matrix.
+A zero means no retained occurrence, not missing information. Word order has
+been discarded: this is a **bag-of-words** representation.
+
+```{r tiny-dtm}
+toy <- c("tea tea cake", "tea bread", "bread cake")
+toy_C <- make_dtm(word_tokens(toy), c("D1", "D2", "D3"), min_df = 1)
+toy_C
+bbc_C <- make_dtm(bbc_clean, bbc$document_id, min_df = 2)
+c(documents = nrow(bbc_C), terms = ncol(bbc_C),
+  zero_fraction = mean(bbc_C == 0), empty_rows = sum(rowSums(bbc_C) == 0))
+```
+
+
+**Document frequency** $df_t=\sum_i I(C_{it}>0)$ counts documents containing a
+term, not its total occurrences. The threshold `min_df=2` retains terms found
+in at least two documents. This reduces isolated spellings and singleton terms,
+but may discard meaningful rare words. It is not a statistical significance rule.
+
+```{r small-heatmap, fig.cap="Counts for ten selected articles and ten frequent terms. Rows and columns are not clustered or standardised."}
+chosen_terms <- head(names(sort(colSums(bbc_C), decreasing = TRUE)), 10)
+small <- bbc_C[seq(1, 250, length.out = 10), chosen_terms]
+heatmap(small, Rowv = NA, Colv = NA, scale = "none",
+        margins = c(7, 8), col = hcl.colors(20, "Blues 3"))
+```
+
+
+## Activity A3: Build and inspect the SMS matrix
+
+**Your dataset: SMS. Question:** How sparse is the SMS matrix, and can vocabulary filtering leave a message empty?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Build the SMS DTM with `min_df=2`, keeping all message IDs as row names.
+2. Report rows, columns, zero fraction and empty rows; list the affected IDs.
+3. Reconstruct one nonzero cell directly from that message's tokens.
+4. Make a small heatmap. State which information is no longer recoverable from the DTM.
+
+
+```{r activity-a3, eval=FALSE}
+sms_clean <- word_tokens(sms$text, stop_words = course_stopwords)
+C_sms_all <- make_dtm(sms_clean, sms$document_id, min_df = 2)
+# Inspect dimensions, row sums, a chosen cell and a small heatmap.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# Frequent and distinctive are different questions
+
+Work with **one corpus at a time**, after choosing its stopwords and retained
+vocabulary and excluding documents that have no retained terms. Before using
+the formula, define its ingredients:
+
+- $N$ is the number of **retained documents** in that corpus. The document
+  index is $i=1,\ldots,N$; here one document is one complete article or SMS.
+- $V$ is the number of **distinct retained terms** in the common vocabulary.
+  A term is a word form used as a matrix column. The index $t=1,\ldots,V$
+  identifies the term of interest; $s$ is another index that runs through the
+  same vocabulary when we sum over terms.
+- $C_{it}$ is the **number of occurrences** of term $t$ in document $i$.
+  This is a cell of the document-term count matrix $C$; repetitions count.
+- $L_i=\sum_{s=1}^{V}C_{is}$ is the total number of **retained token occurrences**
+  in document $i$. It is positive for every retained document. It generally
+  differs from `raw_tokens`, which was calculated before stopword removal
+  and vocabulary filtering.
+- $I(C_{it}>0)$ is an **indicator**: it equals 1 if document $i$ contains at
+  least one occurrence of term $t$, and 0 otherwise.
+
+We can now define four related quantities:
+
+\[
+p_{it}=\frac{C_{it}}{L_i},\qquad
+df_t=\sum_{i=1}^{N}I(C_{it}>0),
+\]
+
+\[
+idf_t=\log\left(\frac{N}{df_t}\right),\qquad
+W_{it}=p_{it}\,idf_t.
+\]
+
+1. **Term frequency (TF), $p_{it}$:** the proportion of retained tokens in
+   document $i$ that are term $t$. The proportions sum to one within each
+   document. Here TF means a proportion, not a raw count.
+2. **Document frequency, $df_t$:** the number of retained documents containing
+   term $t$. Each document contributes at most one, however often it repeats
+   the term. For a retained term, $1\leq df_t\leq N$.
+3. **Inverse document frequency (IDF), $idf_t$:** the natural logarithm of
+   $N/df_t$. It is a corpus-level weight, shared by all documents for that
+   term. A term appearing in fewer documents receives a larger IDF; a term
+   appearing in every document has $idf_t=\log(1)=0$.
+4. **TF-IDF, $W_{it}$:** the product of the within-document proportion and the
+   corpus-level IDF. The matrix $W$ has the same document rows and term columns
+   as $C$, but its entries are weights rather than counts. A large value
+   identifies a term that is relatively frequent in this document and not
+   widespread across the corpus; it does not establish universal importance.
+
+**A constructed numerical example.** Suppose a term occurs 4 times among
+100 retained tokens in one document and occurs in 10 of the corpus's 50
+retained documents. Its TF is $4/100=0.04$, its document frequency is 10,
+its IDF is $\log(50/10)=\log(5)$, and its TF-IDF in that document is
+$0.04\log(5)\approx 0.0644$. The four occurrences count four times for TF,
+but this document contributes only one to document frequency. These numbers
+illustrate the formula; they are not a measured BBC result.
+
+We use the natural logarithm and no additive smoothing. Software defaults
+differ, so report this convention and the retained-token denominator.
+The same count can get different weights in different corpora. If every term
+appears in every document, all IDFs are zero; a zero TF-IDF vector cannot be
+normalised for cosine comparisons.
+
+Before normalising, remove and report empty rows once. Use that common document
+set for all representations. `prepare_text()` performs this check and stops on
+zero TF-IDF norms rather than inventing values.
+
+```{r weights, fig.cap="Article-level TF-IDF: a high bar means distinctive within this retained BBC corpus, not universally important."}
+demo <- prepare_text(bbc)
+lab <- prepare_text(sms)
+demo$removed
+lab$removed
+R_bbc <- demo$representation
+R_sms <- lab$representation
+stopifnot(all(abs(rowSums(R_bbc$P) - 1) < 1e-12))
+selected_id <- rownames(R_bbc$C)[1]
+profile <- data.frame(term = colnames(R_bbc$C),
+                      count = R_bbc$C[selected_id, ],
+                      tf = R_bbc$P[selected_id, ], idf = R_bbc$idf,
+                      tfidf = R_bbc$W[selected_id, ])
+head(profile[order(-profile$tfidf), ], 10)
+top_bars(setNames(profile$tfidf, profile$term),
+         "One BBC article: distinctive terms", ylab = "TF-IDF")
+```
+
+
+## Activity A4: Check TF-IDF by hand
+
+**Your dataset: SMS. Question:** Do the most frequent and the most distinctive words agree for one SMS?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Use the already prepared `lab` object. Report retained and excluded message counts.
+2. Choose a nonempty message, print its ID, and compare its top counts and TF-IDF terms.
+3. For one term, calculate count, denominator, document frequency, IDF and weight
+   directly. Check agreement with the matrix. Explain why merging all messages
+   into one document before computing IDF would fail.
+
+
+```{r activity-a4, eval=FALSE}
+R_sms <- lab$representation
+id <- rownames(R_sms$C)[1]
+# Choose a term and verify its TF-IDF from the definition.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# A word cloud needs a named quantity
+
+For a topic-level summary, we will average **article-level** TF-IDF values,
+including zeros for articles without the term. This gives articles equal
+weight. It differs from pooling tokens, where long articles contribute more.
+
+```{r cloud-and-bars, fig.cap="Bars and cloud use the same twenty terms and weights. Cloud position is a layout choice, not a semantic coordinate."}
+business <- demo$docs$category == "business"
+topic_weights <- colMeans(R_bbc$W[business, , drop = FALSE])
+shown <- head(sort(topic_weights, decreasing = TRUE), 20)
+top_bars(shown, "Business: mean article TF-IDF", n = 20,
+         ylab = "Mean TF-IDF, including zeros")
+draw_cloud(shown, n = 20, seed = 13)
+```
+
+
+**Reading the figures.** Bars have a common baseline and support direct
+comparisons. In the cloud, font size encodes weight, but rendered area also
+depends on word length. Position, proximity and direction have no analytic
+meaning. The supplied packing helper uses font size proportional to an affine
+function of square-root weight; it does not promise area-proportional encoding.
+A cloud is an overview, not a substitute for numerical comparison.
+
+
+## Compare article-level TF-IDF across categories
+
+Does a high-weight word describe only one topic, or is it also prominent in
+other topics? Use the **same vocabulary and the same article-level IDF** for
+every category. Do not merge all articles in a category into a single document
+or recalculate IDF separately within each category: those operations change
+the question and make the weights refer to different corpora.
+
+Let $g$ be a category, $G_g$ the set of retained documents in that category,
+and $n_g=|G_g|$ its size. For term $t$, compare
+
+\[
+\overline W_{gt}=\frac{1}{n_g}\sum_{i\in G_g}W_{it}.
+\]
+
+Every retained article contributes, including a zero when it does not contain
+the term. Dividing only by the number of articles containing the word would
+answer a different question. The category mean gives documents equal weight;
+it is neither a pooled token proportion nor a probability that an article
+belongs to that category. Report category sizes alongside the graphs.
+
+```{r category-comparison-tools}
+# These helpers are defined here, so no change to text_helpers.R is needed.
+category_means <- function(W, group) {
+  group <- droplevels(factor(group))
+  stopifnot(nrow(W) == length(group), !anyNA(group),
+            all(is.finite(W)))
+  totals <- rowsum(W, group, reorder = TRUE)
+  counts <- table(group)
+  sweep(totals, 1, as.numeric(counts[rownames(totals)]), "/")
+}
+
+category_top_terms <- function(M, n = 3L) {
+  unique(unlist(lapply(seq_len(nrow(M)), function(i) {
+    values <- sort(M[i, ], decreasing = TRUE)
+    head(names(values)[values > 0], n)
+  }), use.names = FALSE))
+}
+
+plot_category_bars <- function(M, n = 6L, title = "", xlab = "Mean TF-IDF") {
+  d <- do.call(rbind, lapply(seq_len(nrow(M)), function(i) {
+    values <- sort(M[i, ], decreasing = TRUE)
+    values <- head(values[values > 0], n)
+    if (!length(values)) return(NULL)
+    data.frame(category = rownames(M)[i], term = names(values),
+               weight = as.numeric(values))
+  }))
+  if (is.null(d)) stop("No positive weights to plot")
+  d$key <- paste(d$category, d$term, sep = " || ")
+  d$key <- factor(d$key, levels = rev(unique(d$key)))
+  labels <- setNames(d$term, as.character(d$key))
+  ggplot(d, aes(weight, key)) + geom_col(fill = blue) +
+    facet_wrap(~ category, scales = "free_y", ncol = 3) +
+    scale_y_discrete(labels = function(x) unname(labels[x])) +
+    labs(title = title, x = xlab, y = NULL)
+}
+
+plot_category_heatmap <- function(M, terms, title = "",
+                                   fill_title = "Mean TF-IDF") {
+  stopifnot(length(terms) > 0, all(terms %in% colnames(M)))
+  d <- as.data.frame(as.table(M[, terms, drop = FALSE]))
+  names(d) <- c("category", "term", "weight")
+  d$term <- factor(d$term, levels = rev(terms))
+  ggplot(d, aes(category, term, fill = weight)) +
+    geom_tile(colour = "grey90") +
+    scale_fill_gradient(low = "white", high = blue, name = fill_title) +
+    labs(title = title, x = "Category", y = NULL)
+}
+```
+
+```{r bbc-category-tfidf, fig.width=10, fig.height=6, fig.cap="The six highest mean article-level TF-IDF terms within each BBC category. The horizontal scale is shared; term labels can differ between panels."}
+stopifnot(identical(rownames(R_bbc$W), demo$docs$document_id))
+table(demo$docs$category)
+bbc_category_tfidf <- category_means(R_bbc$W, demo$docs$category)
+plot_category_bars(bbc_category_tfidf,
+                    title = "BBC: distinctive terms by topic")
+```
+
+```{r bbc-category-tfidf-heatmap, fig.width=8, fig.height=5.5, fig.cap="The union of the top three terms per category is shown in every category, including zeros. All cells use one common TF-IDF colour scale."}
+comparison_terms <- category_top_terms(bbc_category_tfidf, n = 3)
+plot_category_heatmap(bbc_category_tfidf, comparison_terms,
+                       title = "BBC: compare the same terms across topics")
+```
+
+**Reading the comparison.** The panels identify high-weight terms within
+each topic. The heatmap then compares a **common set of terms** across topics:
+a word omitted from another panel's top six is not necessarily absent there.
+Check one word with a direct average, including its zero entries:
+
+```{r check-category-mean}
+word <- comparison_terms[1]
+stopifnot(isTRUE(all.equal(
+  unname(bbc_category_tfidf["business", word]),
+  mean(R_bbc$W[demo$docs$category == "business", word])
+)))
+```
+
+Before drawing a content conclusion, read articles contributing to a selected
+high-weight cell. Names or reporting conventions can be distinctive without
+being a complete account of a topic. These are descriptive contrasts, not
+estimates of classification accuracy or causal effects.
+
+## Activity A5: Compare categories and displays
+
+**Your dataset: SMS. Question:** Which display better answers a precise comparison between two terms?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Compute mean message-level TF-IDF for spam, including absent-term zeros.
+2. Select the same twenty positive terms for a bar chart and cloud.
+3. Ask a neighbouring pair to rank two similarly weighted terms using only
+   one display. Check their answer against the values; swap displays.
+4. State the document group, denominator, weights, and cloud-size rule in a caption.
+5. Compute mean message-level TF-IDF for **both ham and spam**, using `R_sms$W`
+   and the matching rows of `lab$docs`. Keep the common SMS-level IDF and include
+   absent-term zeros. Report the retained message count in each label; the
+   original balanced sample need not remain balanced after filtering.
+6. Make a two-category bar comparison and a heatmap for the union of each
+   label's top three terms. Use common weight scales. Select one term and
+   verify its mean directly, including messages where it is absent.
+7. Describe one shared term and one contrasting term, checking the original
+   messages. Explain why these weights are not probabilities of spam.
+
+
+```{r activity-a5, eval=FALSE}
+is_spam <- lab$docs$category == "spam"
+# First compare the same twenty spam weights in bars and a cloud.
+sms_category_tfidf <- category_means(R_sms$W, lab$docs$category)
+# Then use plot_category_bars() and plot_category_heatmap() for ham versus spam.
+# State the category denominators and verify one cell independently.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# Recover a little order with n-grams
+
+A bigram is a pair of adjacent tokens; a trigram has three. Extract them
+**before** deleting words, and avoid crossing sentence or document boundaries.
+Only afterwards filter n-grams containing stopwords. Otherwise removing `of`
+from the constructed phrase `bank of england` would invent `bank england`.
+The phrase is a teaching illustration, not an extracted BBC quotation.
+
+```{r bigrams, fig.cap="Bigrams are adjacent retained word sequences from within approximate sentence boundaries."}
+phrase <- "bank of england"
+sentence_ngrams(phrase, filter_stop = FALSE)
+word_tokens(phrase, stop_words = course_stopwords)
+bbc_bigrams <- lapply(bbc$text, sentence_ngrams)
+bigram_counts <- term_counts(bbc_bigrams)
+top_bars(setNames(bigram_counts$count, bigram_counts$term),
+         "BBC: retained adjacent bigrams", ylab = "Bigram occurrences")
+```
+
+
+Our sentence splitter is punctuation-based; abbreviations and unusual SMS
+punctuation can defeat it. The baseline word rule also ignores punctuation
+inside a sentence. Read contextual examples before treating any pair as a
+linguistically validated expression. With `mr` in the stopword list, a bigram
+containing it is filtered out **after extraction**. For example, the constructed
+sequence `said mr smith` yields no retained bigram from these two pairs; it
+must not be converted into the invented adjacency `said smith`. Thus `mr` is
+absent from the filtered bigram network, without reconnecting the words that
+surrounded it. Same-document co-occurrence is a different relationship from
+adjacency and can connect words many sentences apart.
+
+
+
+## Compare n-gram profiles across article categories
+
+Apply the same question to adjacent expressions: which bigrams are distinctive
+of each topic, and how widely are they shared? Preserve **one row per document**
+and build a common bigram vocabulary. Repeated occurrences contribute to
+counts, whereas document presence records whether a pair occurs at least once.
+
+We use two complementary summaries:
+
+- **Mean document-level bigram TF-IDF**, with one global article-level IDF
+  computed for the whole comparison corpus, not one IDF per topic.
+- **Document prevalence:** the percentage of documents in the category that
+  contain the bigram at least once. It lies between 0 and 100 and does not
+  increase when a single document repeats the same pair many times.
+
+For this descriptive comparison, keep the same document IDs as the unigram
+analysis (`demo$docs`, or `lab$docs` in the SMS exercise). Some of these texts
+may have no bigram surviving `min_df=2`. Report their counts by category.
+Their presence indicators and their contribution to the **category-average**
+TF-IDF are set to zero. For other documents, TF divides by the number of
+retained bigram occurrences in that document. IDF uses all documents in this
+comparison, including those with no retained bigram. This explicit zero-row
+convention is for category summaries: an empty row is not a normalised
+probability profile and must not be sent into the distance calculations of
+Unit 14. No new document is silently removed here.
+
+```{r ngram-category-tools}
+ngram_category_profiles <- function(docs, n = 2L, min_df = 2L) {
+  grams <- lapply(docs$text, sentence_ngrams, n = n)
+  C <- make_dtm(grams, docs$document_id, min_df = min_df)
+  totals <- rowSums(C)
+  nonempty <- totals > 0
+  P <- matrix(0, nrow(C), ncol(C), dimnames = dimnames(C))
+  P[nonempty, ] <- C[nonempty, , drop = FALSE] / totals[nonempty]
+  idf <- log(nrow(C) / colSums(C > 0))
+  W <- sweep(P, 2, idf, "*")
+  audit <- do.call(rbind, lapply(split(seq_len(nrow(docs)), docs$category),
+    function(i) data.frame(documents = length(i),
+                           no_retained_ngram = sum(!nonempty[i]))))
+  stopifnot(all(is.finite(W)), all(W[!nonempty, , drop = FALSE] == 0))
+  list(counts = C, weights = W, audit = audit,
+       mean_tfidf = category_means(W, docs$category),
+       prevalence = category_means(100 * (C > 0), docs$category))
+}
+```
+
+```{r bbc-category-bigrams, fig.width=10, fig.height=6, fig.cap="Bigram TF-IDF contrasts across BBC topics. The IDF vocabulary and document corpus are common to all categories; absent pairs contribute zeros to category means."}
+bbc_bigram_profiles <- ngram_category_profiles(demo$docs, n = 2)
+knitr::kable(bbc_bigram_profiles$audit, row.names = TRUE)
+plot_category_bars(bbc_bigram_profiles$mean_tfidf,
+                    title = "BBC: distinctive bigrams by topic",
+                    xlab = "Mean article-level bigram TF-IDF")
+```
+
+```{r bbc-category-bigram-prevalence, fig.width=8, fig.height=5.5, fig.cap="For a common set of selected bigrams, each cell gives the percentage of articles containing the pair. Repeated occurrences in the same article count only once."}
+comparison_bigrams <- category_top_terms(bbc_bigram_profiles$mean_tfidf, n = 3)
+plot_category_heatmap(bbc_bigram_profiles$prevalence, comparison_bigrams,
+                       title = "BBC: how widely are these pairs shared?",
+                       fill_title = "Documents (%)")
+```
+
+**Interpretation.** A high mean TF-IDF can identify an expression concentrated
+in a subset of documents; prevalence tells us whether it is widespread within
+the category. These quantities have different units, so do not compare their
+numerical sizes directly. A word pair absent from a top-term panel may still
+occur in that category: use the common-term heatmap and original texts.
+Longer documents also offer more opportunities for a pair to appear, so
+prevalence does not fully adjust for document length. Keep that limitation
+alongside the length plots from Activity A1. To investigate trigrams, repeat
+the same function with `n=3`, retaining the same IDs and reporting the new
+empty-profile counts; do not infer trigram counts from bigram paths.
+
+## From bigram counts to a directed word network
+
+The bigram table also defines a **directed network**:
+
+- A **node** is a distinct word form, not an individual token occurrence.
+- An **arrow** from word $a$ to word $b$ means that $b$ follows $a$ in at
+  least one extracted bigram. The reverse order would be a different arrow.
+- The **edge weight** is the number of occurrences of that ordered pair
+  across the corpus. Thicker arrows represent more occurrences. A separate
+  `documents` column counts how many different texts contain the pair.
+
+The network retains the within-sentence extraction and stopword rules above.
+It is an adjacency network, not a same-document co-occurrence network and
+not a diagram of causal effects.
+
+```{r bbc-bigram-network, fig.width=10, fig.height=4.8, fig.cap="BBC directed bigram network. Arrow width encodes occurrences. Shown: the three largest components with at least three words, after retaining at most forty non-self bigrams occurring at least ten times. Panels separate disconnected parts of this filtered graph."}
+bbc_edges <- bigram_edges(bbc_bigrams, min_count = 10, top_n = 40)
+head(bbc_edges)
+bbc_network <- plot_bigram_network(bbc_edges, max_components = 3,
+                                   title = "BBC: which words follow which?")
+bbc_network$plot
+```
+
+**Reading the network.** Follow the arrowheads to read order. With `mr`
+removed, the selected components show recurring time expressions, such as
+branches through `last` and `year`, a name-and-role sequence involving
+`actor`, `jamie`, `foxx` and `actress`, and expressions ending in `years ago`.
+A well-connected word can reflect how articles refer to time rather than
+their main topic. These components suggest expressions to investigate; they
+are not automatically discovered topics or semantic clusters.
+
+The former reporting pattern through `mr` is no longer part of this graph.
+Its removal changes which edges and components enter the top-forty display,
+so component numbers and prominent nodes must be read from the current plot.
+It does not mean that the underlying articles stopped containing forms of
+address or reporting language.
+
+To keep labels readable, the display selects frequent edges, omits repeated-word
+self-loops, and shows only the three largest components of at least three nodes.
+A component is a set connected when arrow direction is ignored. The original
+bigram table is unchanged. A missing edge or disconnected panel can be a
+consequence of the display filter; it does not prove absence from the full
+corpus. The layout separates labels: geometric distance and edge crossings
+have no semantic meaning. All plotting code is in the supplied helper file;
+no extra R package is required.
+
+## Let paths suggest longer n-grams, then verify them
+
+A directed path $a\to b\to c$ suggests the candidate trigram `a b c`.
+But its two edges may come from different sentences or different documents:
+their presence does **not** establish that all three words occurred together.
+Even if both edges are frequent, the longer phrase can be absent. Extract
+trigrams from the original texts to answer that question.
+
+```{r network-to-trigrams}
+candidates <- candidate_trigrams(bbc_network$edges)
+path_check <- verify_phrases(candidates, bbc$text, n = 3)
+knitr::kable(path_check, row.names = FALSE,
+             caption = "Candidate three-word paths and their actual within-sentence trigram counts.")
+```
+
+**Interpretation.** Under the current stopword rule, `last year old` has
+count zero even though the graph contains `last` to `year` and `year` to `old`.
+Those two observed pairs do not establish one three-word expression. In
+contrast, candidates such as `two years ago` and `actor jamie foxx` are
+verified in the original ordered tokens. Read the computed table for the
+current counts rather than inferring them from edge widths.
+
+The graph is therefore useful for proposing expressions; the ordered source
+tokens decide whether those expressions really occur. The name-and-role
+component also suggests a path with three arrows and four words:
+
+```{r network-to-four-grams}
+verify_phrases("actor jamie foxx actress", bbc$text, n = 4)
+```
+
+This four-gram is checked as an actual sequence, rather than inferred by
+multiplying edge weights or taking their minimum. Bigram weights alone do
+not determine trigram or four-gram frequencies. Longer n-grams retain more
+context but usually have less support. Compare the count of an expression
+with the number of source documents containing it before calling it a
+general pattern. Changing an edge threshold can also break a visible path
+without changing any original text.
+
+
+## Explore each category's three main word networks
+
+Build the bigram network **separately within each category**. Here we choose
+entertainment and politics. Each category supplies its own frequent pairs,
+nodes, connected components and layout; neither graph is constrained to the
+pooled BBC network.
+
+For a reproducible meaning of "main", retain at most forty non-self bigrams
+occurring at least three times **within the category**, then show the three
+largest components containing at least three words. Components are ranked by
+their number of distinct words, not by semantic importance. The two categories
+use the same selection rule but can yield completely different networks.
+
+```{r entertainment-bigram-networks, fig.width=10, fig.height=4.8, fig.cap="Entertainment: the three largest eligible components of its own top-forty bigram graph. Pairs must occur at least three times in entertainment articles. Arrows show order and widths show within-category occurrence counts."}
+entertainment_bigrams <- bbc_bigrams[bbc$category == "entertainment"]
+entertainment_edges <- bigram_edges(entertainment_bigrams,
+                                    min_count = 3, top_n = 40)
+entertainment_network <- plot_bigram_network(entertainment_edges,
+  max_components = 3, title = "Entertainment: three main bigram networks")
+entertainment_network$plot
+```
+
+```{r politics-bigram-networks, fig.width=10, fig.height=4.8, fig.cap="Politics: an independently selected and laid-out graph, using the same minimum count and top-forty rule. The three components are selected within politics, not copied from entertainment or from the pooled corpus."}
+politics_bigrams <- bbc_bigrams[bbc$category == "politics"]
+politics_edges <- bigram_edges(politics_bigrams,
+                               min_count = 3, top_n = 40)
+politics_network <- plot_bigram_network(politics_edges,
+  max_components = 3, title = "Politics: three main bigram networks")
+politics_network$plot
+```
+
+**Interpretation.** Entertainment now brings out its own names, award-related
+phrases and titles; politics brings out its own political names, institutions
+and expressions. Identify a connected sequence in each category and check
+whether a longer expression really occurs in its source articles. With `mr`
+filtered out, an honorific is not a node to interpret in either graph.
+
+These plots are exploratory summaries of each category's recurring language.
+Component numbers and node positions are local to each plot and are not
+matched across categories. Read the count legends rather than treating equal
+drawn widths as equal counts across plots. Each category contains fifty
+articles, but their lengths and repetition patterns can still differ. A
+missing expression may have fallen below the threshold or outside the top
+forty: use the category tables and source texts before claiming absence.
+
+## Activity A6: From a network to longer phrases
+
+**Your dataset: SMS. Question:** Which longer expressions does a bigram network suggest, and which actually occur?
+
+For all comparisons in this activity, use the retained messages in
+`lab$docs`, with the same IDs as `R_sms$W`. This keeps unigram, bigram and
+network category denominators aligned; report the original excluded messages
+as in A4. When reading source messages, match by `document_id`.
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Count within-message, within-sentence bigrams and plot ten frequent pairs.
+2. Build a directed network with `min_count=2`, `top_n=40` and at most three
+   displayed components. State what its nodes, arrows, widths and filters mean.
+3. Follow two arrows to propose a three-word phrase. Predict whether it really
+   occurs, then use `candidate_trigrams()` and `verify_phrases()` to check it.
+   Explain why two positive edge counts alone cannot answer this question.
+4. Locate two original messages containing a repeated pair and verify adjacency.
+   Compare its occurrence count with its `documents` count.
+5. If the displayed graph has a three-arrow path, propose a four-gram and check
+   it with `n=4`. Otherwise, explain how a display threshold can hide such paths.
+6. Replot with `min_count=4`, keeping `top_n=40`. Describe which visible
+   connections change. Retain the extraction order: do not delete stopwords
+   before identifying adjacent sequences.
+7. Compare bigrams between **ham and spam** using
+   `ngram_category_profiles(lab$docs, n=2)`. Report label sizes and texts with
+   no retained bigram; draw category TF-IDF bars and a common-pair prevalence
+   heatmap. Explain why occurrences and document prevalence can disagree.
+8. Split `sms_bigrams` by `lab$docs$category` and build **separate ham and
+   spam networks**, following the entertainment/politics example. In each
+   label, select its own frequent edges and show up to three main components;
+   do not reuse the pooled graph's nodes or layout. Start with `min_count=2`
+   and `top_n=40`, and inspect how many eligible components remain. If fewer
+   than three exist, report that result; if none has three words, do not call
+   the plot helper with an empty selection. You may explore `min_count=1` as
+   a clearly labelled sensitivity analysis, noting the weaker support.
+   Compare the expression types suggested by the plots, verify a pair in
+   original messages, and state the message counts in each label. Repeat
+   the profile comparison for trigrams if time permits.
+
+
+```{r activity-a6, eval=FALSE}
+sms_bigrams <- lapply(lab$docs$text, sentence_ngrams)
+sms_edges <- bigram_edges(sms_bigrams, min_count = 2, top_n = 40)
+# Draw the pooled network, propose paths, check n-grams and source messages.
+# For category plots, split these lists and fit each label's network afresh.
+ham_bigrams <- sms_bigrams[lab$docs$category == "ham"]
+spam_bigrams <- sms_bigrams[lab$docs$category == "spam"]
+# Inspect bigram_edges() in each label before choosing the plotting threshold.
+sms_bigram_profiles <- ngram_category_profiles(lab$docs, n = 2)
+# Compare its mean_tfidf and prevalence matrices for ham and spam.
+# Keep lab$docs$category matched to these same retained SMS rows.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# Sensitivity: a threshold changes what can be represented
+
+The document-frequency threshold is part of the feature definition. Compare
+BBC thresholds before choosing the more attractive plot.
+
+```{r thresholds}
+bbc_df5 <- make_dtm(bbc_clean, bbc$document_id, min_df = 5)
+data.frame(min_df = c(2,5),
+           vocabulary = c(ncol(bbc_C), ncol(bbc_df5)),
+           empty = c(sum(rowSums(bbc_C)==0), sum(rowSums(bbc_df5)==0)))
+```
+
+
+## Activity A7: Audit a vocabulary change
+
+**Your dataset: SMS. Question:** What changes when the SMS minimum document frequency rises from two to five?
+
+Before running R, write a prediction and discuss it with a partner. Then:
+
+1. Use the same tokens and all 240 IDs to build the two matrices.
+2. Compare vocabulary size, empty rows, and which original messages lose all features.
+3. Identify a meaningful term removed by the stronger filter and justify whether
+   you would keep it. Separate changed vocabulary from changed document inclusion.
+4. Explain why later map comparisons must use a common retained document set.
+
+
+```{r activity-a7, eval=FALSE}
+C2 <- make_dtm(sms_clean, sms$document_id, min_df = 2)
+C5 <- make_dtm(sms_clean, sms$document_id, min_df = 5)
+# Compare terms, empty rows and IDs; inspect one affected original.
+```
+
+**Record and compare:** save the requested output, explain what it shows in
+two or three sentences, and compare your prediction with a neighbouring group.
+Agree on one limitation. Rotate who writes the code and who checks the result.
+
+
+# Bring the choices together
+
+Before moving to distances, keep the document IDs, feature definitions and
+weights together. A visually distinctive word may be a name, a formatting
+artifact or a rare spelling; an appealing cloud does not validate the pipeline.
+
+# Check your understanding
+
+**Q1.** A term occurs ten times in one document and once in each of ten other
+documents. What are its total count and document frequency?
+
+**Q2.** Why can a word have a positive count but zero TF-IDF?
+
+**Q3.** Does proximity in a word cloud imply semantic similarity?
+
+**Q4.** Why retain complete messages as rows even when extracting sentence-level n-grams?
+
+**Q5.** If both `a b` and `b c` occur in the corpus, must `a b c` occur?
+How would you check rather than infer it from the network?
+
+# Take-home messages
+
+- A corpus is a collection of defined observational units, not just a bag of files.
+- Preprocessing changes the variables; record the choices and inspect original texts.
+- Counts, proportions and TF-IDF answer different questions.
+- Category contrasts need a common vocabulary and IDF, stated denominators,
+  absent-term zeros, and common graphical scales.
+- N-gram occurrence counts and document prevalence describe different aspects
+  of an expression. Separate category networks can reveal different recurring
+  phrases; report their selection rules and interpret their own legends.
+- A word cloud needs explicit weights and does not supply a semantic geometry.
+- Adjacent n-grams must be extracted before word deletion; verify their context.
+- Directed bigram paths suggest longer phrases but cannot establish their
+  presence or frequency. Check the original ordered tokens.
+- Empty profiles must be handled explicitly before comparing documents.
+
+# Sources and further reading
+
+- [BBC dataset and attribution](https://github.com/derekgreene/bbc-datasets).
+  Greene and Cunningham (2006), ICML. Original article copyright remains BBC;
+  the distributor specifies non-commercial and research use.
+- [SMS Spam Collection](https://archive.ics.uci.edu/dataset/228/sms+spam+collection).
+  Almeida and Hidalgo (2011), UCI, DOI 10.24432/C5CC84; CC BY 4.0.
+- Silge and Robinson, [Text Mining with R](https://www.tidytextmining.com/):
+  word frequencies, TF-IDF and n-grams.
+- R documentation: [classical MDS](https://stat.ethz.ch/R-manual/R-devel/library/stats/html/cmdscale.html)
+  and [correspondence analysis](https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/corresp.html).
+
+See `data/text_corpora_sources.txt` and `data/text_corpora_manifest.json` for
+selection, deduplication, source identifiers, seeds and file hashes. The supplied
+CSVs are fixed classroom inputs. Both are balanced teaching subsets, not
+estimates of real category prevalence. No download occurs while knitting.
+
+# Reproducibility information
+
+The R code for this revision, including category summaries and independently
+selected category networks, was executed when prepared. Only the Rmd source was updated;
+HTML and PDF outputs were not regenerated for this revision.
+Activity starter chunks are intentionally unevaluated:
+copy them to your own script or enable them after completing the instructions.
+The following records the versions used for this rendering.
+
+```{r session-info}
+sessionInfo()
+```
+
+_________________________________
+
+> **Note on AI assistance**
+>
+> These teaching materials were prepared with assistance from
+> ChatGPT (OpenAI) in drafting explanations, developing examples,
+> and generating R code. The author retains responsibility
+> for the final content.
